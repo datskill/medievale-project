@@ -75,6 +75,21 @@ button.principal:hover{background:#f2d684}
 .carte button{color:var(--encre);border-color:var(--encre);font-size:1.05rem;padding:6px 14px}
 .carte button.principal{color:#2a1b10}
 .carte kbd{font-family:inherit;border:1px solid var(--encre);border-radius:3px;padding:0 5px}
+.carte.tuto{max-width:540px}
+.carte .chapitre{margin:0;font-style:italic;font-size:.9rem;opacity:.75}
+.carte ul.points{list-style:disc;padding-left:20px;margin:0 0 10px}
+.carte ul.points li{margin-bottom:4px}
+.carte ol.etapes{counter-reset:e;margin:4px 0 12px}
+.carte ol.etapes li{counter-increment:e;position:relative;padding:4px 0 4px 34px;border-bottom:1px dotted rgba(42,27,16,.25)}
+.carte ol.etapes li::before{content:counter(e);position:absolute;left:0;top:4px;width:24px;height:24px;border-radius:50%;background:var(--chene);color:var(--parchemin);text-align:center;line-height:24px;font-size:.9rem}
+.carte .astuce{border-left:3px solid var(--chene);background:rgba(90,59,34,.1);padding:6px 10px;font-size:.95rem}
+.carte .nav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px}
+.carte .nav .principal{width:auto;margin:0;padding:6px 16px}
+.carte .points-pages{display:flex;gap:6px}
+.carte .points-pages i{width:8px;height:8px;border-radius:50%;background:rgba(42,27,16,.25)}
+.carte .points-pages i.actif{background:var(--encre)}
+.carte .passer{border:none;text-decoration:underline;font-size:.9rem;padding:2px 0;opacity:.75}
+.carte .boutons{display:flex;flex-direction:column;gap:8px}
 @media (max-width:920px){.cadre{grid-template-columns:1fr}}
 </style>
 </head>
@@ -89,7 +104,7 @@ button.principal:hover{background:#f2d684}
       <canvas id="jeu" width="800" height="600" aria-label="Salle de la taverne"></canvas>
       <div id="overlay" role="dialog" aria-modal="true"></div>
     </div>
-    <p class="aide"><kbd>Z Q S D</kbd> ou flèches : se déplacer. <kbd>E</kbd> : prendre un plat ou servir. <kbd>R</kbd> : préparer une fournée. <kbd>P</kbd> : pause.</p>
+    <p class="aide"><kbd>Z Q S D</kbd> ou flèches : se déplacer. <kbd>E</kbd> : prendre un plat ou servir. <kbd>R</kbd> : préparer une fournée. <kbd>P</kbd> : pause. <kbd>T</kbd> : tutoriel.</p>
   </div>
   <aside class="ardoise" id="ardoise" aria-live="polite"></aside>
 </div>
@@ -162,7 +177,7 @@ const stationsActives = () => STATIONS.filter(s => !s.equip || S.equip[s.equip])
 /* ---------- état et sauvegarde ---------- */
 function nouvellePartie() {
   return {
-    version: 1, jour: 1, deniers: 40, rep: 30, dette: 0, introVue: false,
+    version: 1, jour: 1, deniers: 40, rep: 30, dette: 0, introVue: false, tutoVu: false,
     stock: { orge: 3, viande: 1, legumes: 4, bois: 4, pain: 2, fromage: 2 },
     stations: {
       tonneau1: { portions: 12, enCours: false, reste: 0 },
@@ -191,7 +206,7 @@ function sauver() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } c
 let S = charger();
 const P = { x: ALLEE_X, y: 220, mains: [], marche: 0, bouge: false };
 const R = {
-  phase: 'matin', horloge: 0, spawnT: 2, ferme: false, pause: false, overlay: null,
+  phase: 'matin', horloge: 0, spawnT: 2, ferme: false, pause: false, overlay: null, page: 0, retour: null,
   clients: [], textes: [], journal: [], toast: null, uid: 0, confirmReset: 0,
   stats: null,
 };
@@ -211,7 +226,14 @@ addEventListener('keydown', e => {
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
   touches[e.code] = true;
   if (e.repeat) return;
-  if (e.code === 'KeyE') interagir();
+  if (R.overlay === 'tuto') {
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') pageTuto(1);
+    else if (e.code === 'ArrowLeft' || e.code === 'KeyA') pageTuto(-1);
+    else if (e.code === 'Escape' || e.code === 'KeyT') fermerTuto();
+    return;
+  }
+  if (e.code === 'KeyT') ouvrirTuto();
+  else if (e.code === 'KeyE') interagir();
   else if (e.code === 'KeyR') preparer();
   else if (e.code === 'KeyP' || e.code === 'Escape') basculerPause();
 });
@@ -340,7 +362,7 @@ function nuit() {
   message(`Jour ${S.jour}. ` + (notes.length ? notes.join('. ') + '.' : 'Le marché est ouvert.'));
 }
 function basculerPause() {
-  if (R.overlay === 'intro' || R.overlay === 'bilan') return;
+  if (R.overlay === 'intro' || R.overlay === 'bilan' || R.overlay === 'tuto') return;
   R.overlay = R.overlay === 'pause' ? null : 'pause';
   afficherOverlay();
 }
@@ -638,7 +660,7 @@ function rendrePanel() {
     if (S.deniers < 15 && S.dette < 100) h += `<button class="secondaire" data-a="pret">Demander 40 deniers au seigneur (50 à rendre)</button>`;
   }
   h += '<h3>Carnet</h3><ol class="carnet">' + (R.journal.length ? R.journal.map(j => `<li>${j}</li>`).join('') : '<li>Achète tes ingrédients, prépare tes plats, puis ouvre la taverne.</li>') + '</ol>';
-  h += `<div class="pied"><span>Sauvegarde chaque matin</span><button data-a="nouvelle">${Date.now() < R.confirmReset ? 'Confirmer : tout effacer' : 'Nouvelle partie'}</button></div>`;
+  h += `<div class="pied"><span>Sauvegarde chaque matin</span><button data-a="tuto">Tutoriel</button><button data-a="nouvelle">${Date.now() < R.confirmReset ? 'Confirmer : tout effacer' : 'Nouvelle partie'}</button></div>`;
   if (h !== dernierPanel) { panel.innerHTML = h; dernierPanel = h; }
 }
 panel.addEventListener('click', e => {
@@ -646,6 +668,7 @@ panel.addEventListener('click', e => {
   b.blur();
   const a = b.dataset.a;
   if (a === 'ouvrir') ouvrir();
+  else if (a === 'tuto') ouvrirTuto();
   else if (a === 'acheter' && R.phase === 'matin') {
     const i = b.dataset.k, n = +b.dataset.n, cout = S.prix[i] * n;
     if (S.deniers >= cout) { S.deniers -= cout; S.stock[i] += n; sauver(); }
@@ -656,7 +679,7 @@ panel.addEventListener('click', e => {
     S.deniers += 40; S.dette += 50; message('Le seigneur t\'avance 40 deniers.'); sauver();
   } else if (a === 'nouvelle') {
     if (Date.now() < R.confirmReset) {
-      S = nouvellePartie(); S.introVue = true; sauver();
+      S = nouvellePartie(); S.introVue = true; S.tutoVu = true; sauver();
       R.phase = 'matin'; R.clients = []; R.journal = []; R.overlay = null; P.mains = []; P.x = ALLEE_X; P.y = 220;
       SIEGES.forEach(s => s.occ = null); resetStats(); R.confirmReset = 0; afficherOverlay();
       message('Nouvelle partie. Bienvenue à La Chope d\'Étain.');
@@ -665,12 +688,88 @@ panel.addEventListener('click', e => {
   rendrePanel();
 });
 
-/* ---------- fenêtres (intro, bilan, pause) ---------- */
+/* ---------- tutoriel ---------- */
+// Chaque page est une fonction : les chiffres viennent de DATA et restent justes si on les modifie.
+function recetteTuto(id) {
+  const rec = DATA.recettes[id];
+  const ent = Object.entries(rec.entrees).map(([i, n]) => `${n} ${DATA.ingredients[i].nom.toLowerCase()}`).join(', ');
+  return `<li><strong>${rec.nom}</strong> : ${ent} donnent ${rec.rendement} ${rec.unite} en ${rec.duree === 'nuit' ? 'une nuit' : rec.duree + ' secondes'}, vendus ${rec.prix} d${rec.perissable ? ' (se garde mal)' : ''}.</li>`;
+}
+const TUTO = [
+  () => `<p class="chapitre">Le carnet de l'oncle, première page</p><h2>Une journée à la taverne</h2>
+    <p>Chaque journée suit le même fil, en trois temps :</p>
+    <ol class="etapes">
+      <li><strong>Le matin</strong>, le marché est ouvert. Achète tes ingrédients sur l'ardoise et lance tes préparations. Rien ne presse : le temps ne file pas tant que la taverne est fermée.</li>
+      <li><strong>Le service</strong> commence quand tu cliques sur « Ouvrir la taverne ». Les clients entrent, s'assoient et commandent jusqu'à minuit.</li>
+      <li><strong>Le soir</strong>, tu lis le bilan de la journée puis tu vas dormir. La nuit fait son œuvre sur tes tonneaux et tes marmites.</li>
+    </ol>
+    <p class="astuce">Les prix du marché changent chaque jour. Achète davantage quand une denrée est bon marché.</p>`,
+  () => `<p class="chapitre">Deuxième page</p><h2>La fabrication</h2>
+    <p>Derrière le comptoir se trouvent tes postes de travail. Approche-toi de l'un d'eux et appuie sur <kbd>R</kbd> pour lancer une fournée : les ingrédients sont pris dans ta réserve.</p>
+    <ul class="points">${Object.keys(DATA.recettes).map(recetteTuto).join('')}</ul>
+    <p>L'étiquette sous chaque poste indique ce qui reste ou le temps de préparation. Une fois la fournée prête, appuie sur <kbd>E</kbd> devant le poste pour prendre une portion.</p>
+    <p class="astuce">Le ragoût et le pain ne se gardent pas : la moitié des portions restantes tourne pendant la nuit. N'en prépare pas plus que tu ne peux en vendre.</p>`,
+  () => `<p class="chapitre">Troisième page</p><h2>Le secret de la bière</h2>
+    <p>La bière ne se cuisine pas, elle se <em>brasse</em>, puis elle <em>fermente</em>. Voici ce qui se passe dans le tonneau :</p>
+    <ol class="etapes">
+      <li><strong>Le maltage.</strong> On fait germer l'orge puis on la sèche. Son amidon se change peu à peu en sucres.</li>
+      <li><strong>Le brassage.</strong> L'orge concassée trempe dans l'eau chaude. Les sucres passent dans l'eau : on obtient un jus sucré, le moût.</li>
+      <li><strong>La fermentation.</strong> On verse le moût dans le tonneau avec de la levure. Ces minuscules êtres vivants mangent le sucre et le changent en alcool et en gaz : ce sont les bulles qui montent du tonneau et la mousse dans la chope.</li>
+      <li><strong>La patience.</strong> La levure travaille lentement, il lui faut toute une nuit. Plus tôt, le moût n'est qu'une eau sucrée.</li>
+    </ol>
+    <p>Dans ta taverne, approche-toi d'un tonneau et appuie sur <kbd>R</kbd> : ${DATA.recettes.biere.entrees.orge} orge deviennent ${DATA.recettes.biere.rendement} chopes, prêtes au réveil. Tu peux brasser le matin ou pendant le service, et même relancer un tonneau qui n'est pas vide.</p>
+    <p class="astuce">La bière, elle, ne tourne pas. Brasse chaque jour pour ne jamais en manquer, et pense au second tonneau quand ta bourse le permet.</p>`,
+  () => `<p class="chapitre">Quatrième page</p><h2>Le service</h2>
+    <ul class="points">
+      <li>Un client assis montre sa commande dans une bulle. La barre au-dessus est sa <strong>patience</strong> : verte, puis jaune, puis rouge.</li>
+      <li>Va au poste qui prépare ce plat et appuie sur <kbd>E</kbd> pour le prendre. Tu n'as que deux mains : deux plats à la fois, pas plus.</li>
+      <li>Approche-toi du client et appuie sur <kbd>E</kbd> pour le servir. Plus tu es rapide, plus le <strong>pourboire</strong> est gros et plus ta réputation monte.</li>
+      <li>Un client dont la patience s'épuise repart fâché, et ta réputation en souffre.</li>
+    </ul>
+    <p>Une bonne réputation attire du beau monde : les marchands viennent dès ${typeClient('marchand').repMin} de réputation, les chevaliers dès ${typeClient('chevalier').repMin}. Ils commandent davantage de ragoût et laissent de meilleurs pourboires.</p>
+    <p class="astuce">Prends deux plats d'un coup quand deux clients attendent la même chose : tu économises un aller-retour.</p>`,
+  () => `<p class="chapitre">Dernière page</p><h2>Le soir et la nuit</h2>
+    <p>À minuit, la taverne ferme. Le bilan montre tes recettes, les clients servis et ta réputation.</p>
+    <ul class="points">
+      <li>Pendant la nuit, la bière en fermentation devient prête et la moitié du ragoût et du pain restants se perd.</li>
+      <li>La partie est sauvegardée chaque matin.</li>
+      <li>Si ta bourse est presque vide, le seigneur peut t'avancer de l'argent. Il se rembourse sur un quart de tes recettes chaque soir.</li>
+    </ul>
+    <p>Tu peux relire ce carnet à tout moment avec la touche <kbd>T</kbd> ou le bouton « Tutoriel » de l'ardoise.</p>
+    <p class="astuce">Pour bien démarrer : achète de l'orge et brasse dès le premier matin, prépare un peu de pain et de fromage, puis ouvre la taverne.</p>`,
+];
+function ouvrirTuto() {
+  if (R.overlay === 'tuto' || R.overlay === 'intro') return;
+  R.retour = R.overlay; R.overlay = 'tuto'; R.page = 0;
+  afficherOverlay();
+}
+function pageTuto(d) {
+  const n = R.page + d;
+  if (n < 0) return;
+  if (n >= TUTO.length) { fermerTuto(); return; }
+  R.page = n; afficherOverlay();
+}
+function fermerTuto() {
+  const premiere = !S.tutoVu;
+  S.tutoVu = true; sauver();
+  R.overlay = R.retour; R.retour = null;
+  afficherOverlay();
+  if (premiere) message('Bienvenue à La Chope d\'Étain. Touche T pour relire le carnet.');
+}
+
+/* ---------- fenêtres (intro, tutoriel, bilan, pause) ---------- */
 const ov = document.getElementById('overlay');
 function afficherOverlay() {
   if (!R.overlay) { ov.className = ''; ov.innerHTML = ''; return; }
-  let h = '<div class="carte">';
-  if (R.overlay === 'intro') {
+  let h = `<div class="carte${R.overlay === 'tuto' ? ' tuto' : ''}">`;
+  if (R.overlay === 'tuto') {
+    const der = R.page === TUTO.length - 1;
+    h += TUTO[R.page]() + `<div class="nav">
+      <button data-o="tuto-prec" ${R.page === 0 ? 'disabled' : ''}>Précédent</button>
+      <span class="points-pages" aria-label="Page ${R.page + 1} sur ${TUTO.length}">${TUTO.map((_, i) => `<i class="${i === R.page ? 'actif' : ''}"></i>`).join('')}</span>
+      <button class="principal" data-o="tuto-suiv">${der ? 'Fermer le carnet' : 'Suivant'}</button></div>
+      ${der ? '' : '<p style="margin:10px 0 0;text-align:right"><button class="passer" data-o="tuto-fin">Passer le tutoriel</button></p>'}`;
+  } else if (R.overlay === 'intro') {
     h += `<h2>La Chope d'Étain</h2>
       <p>Ton oncle t'a laissé sa taverne, un tonneau de bière et quelques deniers. À toi de la faire vivre.</p>
       <p>Le matin, achète tes ingrédients et lance tes préparations. Ouvre ensuite la taverne : les clients s'installent et commandent. Va chercher ce qu'ils demandent et apporte-le avant qu'ils perdent patience.</p>
@@ -688,7 +787,7 @@ function afficherOverlay() {
       <p>Le ragoût et le pain restants perdront la moitié de leurs portions pendant la nuit. La bière en fermentation sera prête au réveil.</p>
       <button class="principal" data-o="dormir">Dormir jusqu'au matin</button>`;
   } else {
-    h += `<h2>Pause</h2><p>Le temps est suspendu dans la taverne.</p><button class="principal" data-o="reprendre">Reprendre</button>`;
+    h += `<h2>Pause</h2><p>Le temps est suspendu dans la taverne.</p><div class="boutons"><button class="principal" data-o="reprendre">Reprendre</button><button data-o="tuto">Relire le tutoriel</button></div>`;
   }
   ov.innerHTML = h + '</div>'; ov.className = 'visible';
   const b = ov.querySelector('button'); if (b) b.focus();
@@ -696,7 +795,11 @@ function afficherOverlay() {
 ov.addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   const o = b.dataset.o;
-  if (o === 'commencer') { S.introVue = true; sauver(); R.overlay = null; afficherOverlay(); message('Bienvenue à La Chope d\'Étain.'); }
+  if (o === 'commencer') { S.introVue = true; sauver(); R.overlay = null; ouvrirTuto(); }
+  else if (o === 'tuto') ouvrirTuto();
+  else if (o === 'tuto-suiv') pageTuto(1);
+  else if (o === 'tuto-prec') pageTuto(-1);
+  else if (o === 'tuto-fin') fermerTuto();
   else if (o === 'dormir') nuit();
   else if (o === 'reprendre') { R.overlay = null; afficherOverlay(); }
   b.blur();
@@ -704,6 +807,7 @@ ov.addEventListener('click', e => {
 
 /* ---------- boucle ---------- */
 if (!S.introVue) R.overlay = 'intro';
+else if (!S.tutoVu) ouvrirTuto(); // parties commencées avant l'ajout du tutoriel
 afficherOverlay();
 let dernier = performance.now(), dernierRendu = 0;
 function boucle(now) {
