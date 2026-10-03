@@ -10,10 +10,11 @@ Contrôles : ZQSD ou flèches pour se déplacer, E pour prendre un plat ou servi
 
 ## Boucle de jeu (version 1)
 
-- Le matin : acheter les ingrédients au marché (prix variables chaque jour) et lancer les préparations.
+- Le matin : acheter les ingrédients au marché et lancer les préparations. Les prix fluctuent chaque jour ; une petite courbe et une flèche indiquent si une denrée est moins chère ou plus chère que sa moyenne des sept derniers jours.
+- La réserve a une place limitée (25, 50 puis 90 ingrédients, agrandie le soir). La viande se garde 2 jours, le pain 3, le fromage 4 : au-delà, elle pourrit.
 - Le service : les clients (paysans, marchands, chevaliers) s'installent et commandent ; le tavernier va chercher les plats et les sert avant que leur patience s'épuise.
 - Le soir : bilan des recettes et de la réputation. Le ragoût et le pain se gardent mal, la bière fermente pendant la nuit.
-- Le soir, on dépense ses deniers pour améliorer l'auberge : postes plus grands, tables en plus (jusqu'à six, pour accueillir plus de clients) et packs de décoration (herbes et fleurs, lanternes, tentures, trophées) qui donnent chacun un avantage durable.
+- Le soir, on dépense ses deniers pour améliorer l'auberge : postes plus grands, réserve plus grande, tables en plus (jusqu'à six, pour accueillir plus de clients) et packs de décoration (herbes et fleurs, lanternes, tentures, trophées) qui donnent chacun un avantage durable.
 - Pas de défaite : en cas de besoin, le seigneur prête de l'argent.
 
 ## Technique

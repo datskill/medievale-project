@@ -48,6 +48,15 @@ ul,ol{list-style:none;margin:0;padding:0}
 .plats small{grid-column:1/-1;color:var(--craie-pale);font-size:.82rem}
 .reserve{display:grid;grid-template-columns:1fr 1fr;column-gap:18px}
 .reserve li{display:flex;justify-content:space-between;padding:1px 0}
+.reserve li.tourne span:last-child{color:#e39a6a}
+.place{margin:4px 0 0;font-size:.82rem;color:var(--craie-pale)}
+.place.plein{color:#e39a6a}
+.marche td small{display:block;font-size:.78rem;color:var(--craie-pale);line-height:1.25}
+.marche .courbe{display:inline-flex;align-items:flex-end;gap:1px;height:12px;margin-left:6px;vertical-align:baseline}
+.marche .courbe i{display:block;width:3px;background:var(--craie-pale);border-radius:1px 1px 0 0}
+.marche .courbe i:last-child{background:var(--suif)}
+.marche .bas{color:#9fd08a}
+.marche .haut{color:#e39a6a}
 table.marche{width:100%;border-collapse:collapse}
 .marche td{padding:3px 0}
 .marche td.prix{text-align:right;padding-right:8px;color:var(--craie-pale);white-space:nowrap}
@@ -131,13 +140,22 @@ const W = 800, H = 600, DUREE_SERVICE = 180, SAVE_KEY = 'taverne-chope-v1';
 
 const DATA = {
   ingredients: {
+    // prix : cours moyen autour duquel le marché fluctue ; garde : nuits avant de pourrir (absent = se conserve)
     orge:    { nom: 'Orge',    prix: 4 },
-    viande:  { nom: 'Viande',  prix: 6 },
+    viande:  { nom: 'Viande',  prix: 6, garde: 2 },
     legumes: { nom: 'Légumes', prix: 1 },
     bois:    { nom: 'Bois',    prix: 1 },
-    pain:    { nom: 'Pain',    prix: 2 },
-    fromage: { nom: 'Fromage', prix: 3 },
+    pain:    { nom: 'Pain',    prix: 2, garde: 3 },
+    fromage: { nom: 'Fromage', prix: 3, garde: 4 },
   },
+  // le marché : chaque nuit le cours dérive au hasard puis revient peu à peu vers le prix moyen
+  marche: { rappel: 0.3, ecart: 0.22, min: 0.5, max: 1.7, memoire: 7 },
+  // la réserve : nombre total d'ingrédients qu'on peut stocker, agrandie le soir
+  reserve: [
+    { nom: 'Petit cellier', cap: 25 },
+    { nom: 'Cellier voûté', cap: 50, prix: 50 },
+    { nom: 'Grande cave', cap: 90, prix: 120 },
+  ],
   recettes: {
     biere:   { nom: 'Bière', unite: 'chopes', article: 'une chope de bière', entrees: { orge: 3 }, rendement: 12, duree: 'nuit', prix: 3, perissable: false },
     ragout:  { nom: 'Ragoût', unite: 'bols', article: 'un bol de ragoût', entrees: { viande: 1, legumes: 2, bois: 1 }, rendement: 6, duree: 30, prix: 5, perissable: true },
@@ -211,10 +229,29 @@ function tirage(paires) {
   for (const p of paires) { r -= p[1]; if (r <= 0) return p[0]; }
   return paires[paires.length - 1][0];
 }
-function tirerPrix() {
-  const p = {};
-  for (const k in DATA.ingredients) p[k] = Math.max(1, Math.round(DATA.ingredients[k].prix * (0.8 + Math.random() * 0.4)));
-  return p;
+function premiersCours() {
+  const c = {};
+  for (const k in DATA.ingredients) c[k] = DATA.ingredients[k].prix * (0.8 + Math.random() * 0.4);
+  return c;
+}
+function evoluerCours(c) {
+  const m = DATA.marche, n = {};
+  for (const k in DATA.ingredients) {
+    const base = DATA.ingredients[k].prix, v = c[k] ?? base;
+    n[k] = clamp(v + (base - v) * m.rappel + base * m.ecart * (Math.random() * 2 - 1), base * m.min, base * m.max);
+  }
+  return n;
+}
+const prixDuCours = c => { const p = {}; for (const k in c) p[k] = Math.max(1, Math.round(c[k])); return p; };
+// tendance d'une denrée : prix du jour comparé à la moyenne des derniers jours
+function tendance(k) {
+  const hist = S.histo[k] || [], p = S.prix[k];
+  const moy = hist.length ? hist.reduce((a, b) => a + b, 0) / hist.length : DATA.ingredients[k].prix;
+  return { moy, ecart: Math.round((p - moy) / moy * 100) };
+}
+function courbe(k) { // petit histogramme des prix des derniers jours, le dernier bâton est le prix du jour
+  const vals = [...(S.histo[k] || []), S.prix[k]], hi = Math.max(...vals);
+  return vals.map(v => `<i style="height:${Math.round(v / hi * 12)}px"></i>`).join('');
 }
 const typeClient = id => DATA.clients.find(t => t.id === id);
 const stationsActives = () => STATIONS.filter(s => !s.equip || S.equip[s.equip]);
@@ -223,13 +260,25 @@ const fourneeMax = id => DATA.recettes[id].rendement * multPoste(id);
 const nbTables = () => DATA.salle[S.tables - 1].tables;
 const tablesActives = () => TABLES.slice(0, nbTables());
 const siegesActifs = () => SIEGES.filter(s => s.table < nbTables());
+const capReserve = () => DATA.reserve[S.reserve - 1].cap;
+const totalReserve = () => Object.values(S.stock).reduce((a, b) => a + b, 0);
+const placeLibre = () => Math.max(0, capReserve() - totalReserve());
+// denrées périssables : S.lots[k][a] = quantité achetée il y a a nuits ; on puise d'abord dans les plus vieilles
+function ajouterStock(k, n) { S.stock[k] += n; if (S.lots[k]) S.lots[k][0] += n; }
+function retirerStock(k, n) {
+  S.stock[k] -= n;
+  const l = S.lots[k]; if (!l) return;
+  for (let a = l.length - 1; a >= 0 && n > 0; a--) { const q = Math.min(l[a], n); l[a] -= q; n -= q; }
+}
+const vieux = k => S.lots[k] ? S.lots[k][S.lots[k].length - 1] : 0; // ce qui pourrira cette nuit
+const aPourrir = () => Object.keys(DATA.ingredients).filter(k => vieux(k) > 0).map(k => `${vieux(k)} ${DATA.ingredients[k].nom.toLowerCase()}`);
 const decoActives = () => Object.keys(DATA.decorations).filter(id => S.deco[id]).map(id => DATA.decorations[id]);
 const multDeco = k => decoActives().reduce((m, d) => m * (d[k] || 1), 1);
 const bonusDeco = () => decoActives().reduce((n, d) => n + (d.bonus || 0), 0);
 
 /* ---------- état et sauvegarde ---------- */
 function nouvellePartie() {
-  return {
+  const cours = premiersCours(), s = {
     version: 1, jour: 1, deniers: 40, rep: 30, dette: 0, introVue: false, tutoVu: false, musique: true,
     stock: { orge: 3, viande: 1, legumes: 4, bois: 4, pain: 2, fromage: 2 },
     stations: {
@@ -240,15 +289,24 @@ function nouvellePartie() {
     },
     equip: { tonneau2: false },
     niveaux: { tartine: 1, ragout: 1, biere: 1 },
-    tables: 1, deco: {},
-    prix: tirerPrix(),
+    tables: 1, deco: {}, reserve: 1,
+    cours, prix: prixDuCours(cours), histo: {}, lots: {},
   };
+  for (const [k, ing] of Object.entries(DATA.ingredients)) {
+    s.histo[k] = [];
+    if (ing.garde) s.lots[k] = [s.stock[k], ...Array(ing.garde - 1).fill(0)];
+  }
+  return s;
 }
 function charger() {
   let s = nouvellePartie();
   try {
     const txt = localStorage.getItem(SAVE_KEY);
-    if (txt) s = Object.assign(s, JSON.parse(txt));
+    if (txt) {
+      const lu = JSON.parse(txt);
+      if (!lu.cours && lu.prix) lu.cours = { ...lu.prix }; // sauvegarde d'avant les cours : on part des prix du jour
+      s = Object.assign(s, lu);
+    }
   } catch (e) { /* pas de sauvegarde lisible : nouvelle partie */ }
   // compléter les champs ajoutés par de futures versions
   for (const k in DATA.ingredients) { if (s.stock[k] == null) s.stock[k] = 0; if (s.prix[k] == null) s.prix[k] = DATA.ingredients[k].prix; }
@@ -257,6 +315,14 @@ function charger() {
   for (const k in DATA.ameliorations) s.niveaux[k] = clamp(s.niveaux[k] || 1, 1, DATA.ameliorations[k].niveaux.length);
   s.tables = clamp(s.tables || 1, 1, DATA.salle.length);
   for (const k in DATA.decorations) s.deco[k] = !!s.deco[k];
+  s.reserve = clamp(s.reserve || 1, 1, DATA.reserve.length);
+  for (const k in DATA.ingredients) {
+    if (s.cours[k] == null) s.cours[k] = s.prix[k];
+    if (!Array.isArray(s.histo[k])) s.histo[k] = [];
+    const g = DATA.ingredients[k].garde;
+    // anciennes sauvegardes : le stock périssable est compté comme acheté du jour
+    if (g && (!Array.isArray(s.lots[k]) || s.lots[k].reduce((a, b) => a + b, 0) !== s.stock[k])) s.lots[k] = [s.stock[k], ...Array(g - 1).fill(0)];
+  }
   return s;
 }
 function sauver() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) {} }
@@ -355,7 +421,7 @@ function preparer() {
   }
   // un poste amélioré prépare plusieurs lots d'un coup, autant que la réserve le permet
   const lots = Math.min(multPoste(s.recette), ...Object.entries(rec.entrees).map(([i, n]) => Math.floor(S.stock[i] / n)));
-  for (const [i, n] of Object.entries(rec.entrees)) S.stock[i] -= n * lots;
+  for (const [i, n] of Object.entries(rec.entrees)) retirerStock(i, n * lots);
   st.enCours = true; st.reste = rec.duree === 'nuit' ? 0 : rec.duree; st.fournee = rec.rendement * lots;
   const pas = lots < multPoste(s.recette) ? ` (${st.fournee} ${rec.unite} seulement, la réserve est courte)` : '';
   message((rec.duree === 'nuit' ? 'Brassage lancé : la bière sera prête demain matin' : `${rec.nom} lancé, prêt dans ${rec.duree} s`) + pas + '.');
@@ -415,7 +481,17 @@ function nuit() {
       notes.push(`${perdu} ${rec.unite} de ${rec.nom.toLowerCase()} ont tourné pendant la nuit`);
     }
   }
-  S.jour++; S.prix = tirerPrix();
+  // la réserve vieillit d'une nuit : les plus vieilles denrées périssables pourrissent
+  const pourri = [];
+  for (const [k, ing] of Object.entries(DATA.ingredients)) {
+    const l = S.lots[k]; if (!l) continue;
+    const perdu = l.pop(); l.unshift(0);
+    if (perdu > 0) { S.stock[k] -= perdu; pourri.push(`${perdu} ${ing.nom.toLowerCase()}`); }
+  }
+  if (pourri.length) notes.push(`Dans la réserve, ${pourri.join(' et ')} ${pourri.length > 1 || parseInt(pourri[0]) > 1 ? 'ont' : 'a'} pourri`);
+  for (const k in DATA.ingredients) { S.histo[k].push(S.prix[k]); S.histo[k] = S.histo[k].slice(-DATA.marche.memoire); }
+  S.cours = evoluerCours(S.cours); S.prix = prixDuCours(S.cours);
+  S.jour++;
   R.phase = 'matin'; R.horloge = 0; R.ferme = false; R.overlay = null; R.clients = [];
   SIEGES.forEach(s => s.occ = null);
   P.x = ALLEE_X; P.y = 220;
@@ -796,9 +872,14 @@ function rendrePanel() {
     const am = DATA.ameliorations[id], fm = multPoste(id) > 1 ? ` ${am.niveaux[S.niveaux[id] - 1].nom} : jusqu'à ${fourneeMax(id)} par fournée.` : '';
     h += `<li><span>${rec.nom}</span><span class="qte">${tot}</span><small>${ent} donnent ${rec.rendement} ${rec.unite} en ${rec.duree === 'nuit' ? 'une nuit' : rec.duree + ' s'}. Vendu ${rec.prix} d${rec.perissable ? ', se garde mal' : ''}.${fm}</small></li>`;
   }
-  h += '</ul><h3>Réserve</h3><ul class="reserve">';
-  for (const [i, ing] of Object.entries(DATA.ingredients)) h += `<li><span>${ing.nom}</span><span>${S.stock[i]}</span></li>`;
-  h += '</ul>';
+  h += `</ul><h3>Réserve</h3><ul class="reserve">`;
+  for (const [i, ing] of Object.entries(DATA.ingredients)) {
+    const tourne = vieux(i);
+    h += `<li${tourne ? ` class="tourne" title="${tourne} pourriront cette nuit"` : ''}><span>${ing.nom}</span><span>${S.stock[i]}${tourne ? ' !' : ''}</span></li>`;
+  }
+  const alerte = aPourrir();
+  h += `</ul><p class="place${placeLibre() ? '' : ' plein'}">${DATA.reserve[S.reserve - 1].nom} : ${totalReserve()} / ${capReserve()} places${placeLibre() ? '' : ', plein'}</p>`;
+  if (alerte.length) h += `<p class="place plein">Pourrira cette nuit : ${alerte.join(', ')}</p>`;
   const packs = decoActives();
   if (S.tables > 1 || packs.length) {
     h += `<h3>La salle</h3><ul class="salle"><li>${nbTables()} tables, ${nbTables() * 2} places</li>`;
@@ -808,8 +889,10 @@ function rendrePanel() {
   if (ph === 'matin') {
     h += '<h3>Marché du jour</h3><table class="marche"><tbody>';
     for (const [i, ing] of Object.entries(DATA.ingredients)) {
-      const p = S.prix[i];
-      h += `<tr><td>${ing.nom}</td><td class="prix">${p} d</td><td class="btns"><button data-a="acheter" data-k="${i}" data-n="1" ${S.deniers < p ? 'disabled' : ''}>+1</button> <button data-a="acheter" data-k="${i}" data-n="5" ${S.deniers < p * 5 ? 'disabled' : ''}>+5</button></td></tr>`;
+      const p = S.prix[i], t = tendance(i), libre = placeLibre();
+      const sens = t.ecart <= -10 ? `<span class="bas">▼ ${t.ecart} %, bon prix</span>` : t.ecart >= 10 ? `<span class="haut">▲ +${t.ecart} %, cher</span>` : '≈ prix habituel';
+      const garde = ing.garde ? ` · se garde ${ing.garde} j` : '';
+      h += `<tr><td>${ing.nom}<span class="courbe" title="Prix des derniers jours">${courbe(i)}</span><small title="Comparé à la moyenne des ${DATA.marche.memoire} derniers jours">${sens}${garde}</small></td><td class="prix">${p} d</td><td class="btns"><button data-a="acheter" data-k="${i}" data-n="1" ${S.deniers < p || libre < 1 ? 'disabled' : ''}>+1</button> <button data-a="acheter" data-k="${i}" data-n="5" ${S.deniers < p * 5 || libre < 5 ? 'disabled' : ''}>+5</button></td></tr>`;
     }
     h += '</tbody></table>';
     for (const [e, eq] of Object.entries(DATA.equipement)) if (!S.equip[e]) h += `<button class="secondaire" data-a="equip" data-k="${e}" ${S.deniers < eq.prix ? 'disabled' : ''}>Acheter un ${eq.nom.toLowerCase()} (${eq.prix} d)</button>`;
@@ -829,7 +912,8 @@ panel.addEventListener('click', e => {
   else if (a === 'musique') basculerMusique();
   else if (a === 'acheter' && R.phase === 'matin') {
     const i = b.dataset.k, n = +b.dataset.n, cout = S.prix[i] * n;
-    if (S.deniers >= cout) { S.deniers -= cout; S.stock[i] += n; sauver(); }
+    if (placeLibre() < n) message(`La réserve est pleine (${capReserve()} places). Agrandis-la le soir.`);
+    else if (S.deniers >= cout) { S.deniers -= cout; ajouterStock(i, n); sauver(); }
   } else if (a === 'equip' && R.phase === 'matin') {
     const eq = DATA.equipement[b.dataset.k];
     if (S.deniers >= eq.prix) { S.deniers -= eq.prix; S.equip[b.dataset.k] = true; message(`${eq.nom} installé.`); sauver(); }
@@ -862,7 +946,9 @@ const TUTO = [
       <li><strong>Le service</strong> commence quand tu cliques sur « Ouvrir la taverne ». Les clients entrent, s'assoient et commandent jusqu'à minuit.</li>
       <li><strong>Le soir</strong>, tu lis le bilan de la journée puis tu vas dormir. La nuit fait son œuvre sur tes tonneaux et tes marmites.</li>
     </ol>
-    <p class="astuce">Les prix du marché changent chaque jour. Achète davantage quand une denrée est bon marché.</p>`,
+    <p>Les prix du marché changent chaque jour. Sous chaque denrée, une petite courbe montre ses prix des derniers jours, et une flèche dit si elle est moins chère <span style="color:#3f7a2e">▼</span> ou plus chère <span style="color:#8a2e3c">▲</span> que d'habitude.</p>
+    <p>Ta réserve a une place limitée : ${DATA.reserve[0].cap} ingrédients au départ. Tu peux l'agrandir le soir.</p>
+    <p class="astuce">Fais des stocks quand une denrée est bon marché, mais attention : ${Object.values(DATA.ingredients).filter(i => i.garde).map(i => `${i.nom.toLowerCase()} se garde ${i.garde} jours`).join(', ')}. Ensuite, elle pourrit dans la réserve.</p>`,
   () => `<p class="chapitre">Deuxième page</p><h2>La fabrication</h2>
     <p>Derrière le comptoir se trouvent tes postes de travail. Approche-toi de l'un d'eux et appuie sur <kbd>R</kbd> pour lancer une fournée : les ingrédients sont pris dans ta réserve.</p>
     <ul class="points">${Object.keys(DATA.recettes).map(recetteTuto).join('')}</ul>
@@ -890,8 +976,9 @@ const TUTO = [
   () => `<p class="chapitre">Dernière page</p><h2>Le soir et la nuit</h2>
     <p>À minuit, la taverne ferme. Le bilan montre tes recettes, les clients servis et ta réputation.</p>
     <ul class="points">
-      <li>Pendant la nuit, la bière en fermentation devient prête et la moitié du ragoût et du pain restants se perd.</li>
+      <li>Pendant la nuit, la bière en fermentation devient prête et la moitié du ragoût et du pain restants se perd. Dans la réserve, la viande, le pain et le fromage trop vieux pourrissent.</li>
       <li>Dans le bilan du soir, tu peux dépenser tes deniers pour améliorer tes postes : une grande planche ou un grand chaudron prépare deux à trois fois plus de portions par fournée.</li>
+      <li>Une réserve plus grande te laisse acheter en gros les jours où le marché est bas.</li>
       <li>Tu peux aussi ajouter des tables, pour recevoir plus de clients à la fois, et décorer la salle : chaque pack de décoration donne un avantage durable, comme de meilleurs pourboires ou plus de réputation.</li>
       <li>La partie est sauvegardée chaque matin.</li>
       <li>Chaque jour, le ménestrel joue un air différent parmi trois. La touche <kbd>M</kbd> le fait taire ou reprendre.</li>
@@ -946,7 +1033,7 @@ function afficherOverlay() {
       <dt>Réputation</dt><dd>${Math.round(S.rep)} (${dr >= 0 ? '+' : ''}${dr})</dd>
       ${R.stats.remb ? `<dt>Remboursé au seigneur</dt><dd>${R.stats.remb} d</dd>` : ''}
       <dt>Bourse</dt><dd>${S.deniers} d</dd></dl>
-      <p>Le ragoût et le pain restants perdront la moitié de leurs portions pendant la nuit. La bière en fermentation sera prête au réveil.</p>
+      <p>Le ragoût et le pain restants perdront la moitié de leurs portions pendant la nuit. La bière en fermentation sera prête au réveil.${aPourrir().length ? ` Dans la réserve, ${aPourrir().join(', ')} pourriront cette nuit.` : ''}</p>
       ${ameliorationsHtml()}
       <button class="principal" data-o="dormir">Dormir jusqu'au matin</button>`;
   } else {
@@ -963,6 +1050,10 @@ function ameliorationsHtml() {
     h += suiv ? `<br><small>${suiv.nom} : ${rec.rendement * suiv.mult} ${rec.unite}</small></span><button data-o="ameliorer" data-k="${id}" ${S.deniers < suiv.prix ? 'disabled' : ''}>${suiv.prix} d</button>` : '<br><small>Au plus haut niveau</small></span>';
     h += '</li>';
   }
+  const rv = DATA.reserve[S.reserve];
+  h += `<li><span><strong>La réserve</strong> : ${DATA.reserve[S.reserve - 1].nom}, ${capReserve()} places`;
+  h += rv ? `<br><small>${rv.nom} : ${rv.cap} places pour faire des stocks</small></span><button data-o="reserve" ${S.deniers < rv.prix ? 'disabled' : ''}>${rv.prix} d</button>` : '<br><small>Au plus haut niveau</small></span>';
+  h += '</li>';
   const sv = DATA.salle[S.tables];
   h += `<li><span><strong>La salle</strong> : ${nbTables()} tables, ${nbTables() * 2} places`;
   h += sv ? `<br><small>Une table de plus : ${sv.tables * 2} places, plus de clients à la fois</small></span><button data-o="agrandir" ${S.deniers < sv.prix ? 'disabled' : ''}>${sv.prix} d</button>` : '<br><small>La salle est pleine</small></span>';
@@ -979,6 +1070,13 @@ function agrandir() {
   if (R.overlay !== 'bilan' || !sv || S.deniers < sv.prix) return;
   S.deniers -= sv.prix; S.tables++;
   message(`Une nouvelle table est installée : ${nbTables() * 2} places dans la salle.`);
+  sauver(); afficherOverlay();
+}
+function agrandirReserve() {
+  const rv = DATA.reserve[S.reserve];
+  if (R.overlay !== 'bilan' || !rv || S.deniers < rv.prix) return;
+  S.deniers -= rv.prix; S.reserve++;
+  message(`${rv.nom} aménagé : la réserve tient ${rv.cap} ingrédients.`);
   sauver(); afficherOverlay();
 }
 function decorer(id) {
@@ -1006,6 +1104,7 @@ ov.addEventListener('click', e => {
   else if (o === 'dormir') nuit();
   else if (o === 'ameliorer') ameliorer(b.dataset.k);
   else if (o === 'agrandir') agrandir();
+  else if (o === 'reserve') agrandirReserve();
   else if (o === 'decorer') decorer(b.dataset.k);
   else if (o === 'reprendre') { R.overlay = null; afficherOverlay(); }
   b.blur();
