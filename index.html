@@ -158,6 +158,7 @@ TABLES.forEach(t => {
   SIEGES.push({ x: t.x + 50, y: t.y, cote: -1, occ: null });
 });
 const DECOR = [{ x: 712, y: 500, w: 50, h: 70 }]; // tonneaux décoratifs (bloquants)
+const ESTRADE = { x: 640, y: 282, w: 92, h: 46 }; // le coin du barde (bloquant)
 const ALLEE_X = 340;
 
 /* ---------- utilitaires ---------- */
@@ -248,7 +249,7 @@ function bloque(x, y) {
   const r = 12;
   if (x < 30 + r || x > 770 - r || y < 138 || y > 568) return true;
   for (const t of TABLES) if (x > t.x - 32 - r && x < t.x + 32 + r && y > t.y - 22 - r && y < t.y + 22 + r) return true;
-  for (const d of DECOR) if (x > d.x - r && x < d.x + d.w + r && y > d.y - r && y < d.y + d.h + r) return true;
+  for (const d of [...DECOR, ESTRADE]) if (x > d.x - r && x < d.x + d.w + r && y > d.y - r && y < d.y + d.h + r) return true;
   return false;
 }
 
@@ -476,6 +477,33 @@ function personne(x, y, habit, tete, coiffe, o = {}) {
   if (o.casque) { ctx.fillRect(x - 8, y - 22, 16, 10); ctx.fillStyle = '#2b2f31'; ctx.fillRect(x - 6, y - 15, 12, 2); }
   else { ctx.fillRect(x - 8, y - 22, 16, 6); ctx.fillStyle = '#2a1d14'; ctx.fillRect(x - 4, y - 13, 2, 2); ctx.fillRect(x + 2, y - 13, 2, 2); }
 }
+function barde(t) {
+  const x = ESTRADE.x + ESTRADE.w / 2, y = ESTRADE.y + 12, b = Musique.battement();
+  const joue = b != null && b >= 0, coup = joue ? 1 - (b % 1) : 0; // coup = 1 au début de chaque temps
+  ctx.fillStyle = '#3a2414'; ctx.fillRect(x - 13, y + 8, 26, 6); ctx.fillRect(x - 11, y + 14, 4, 8); ctx.fillRect(x + 7, y + 14, 4, 8); // tabouret
+  ctx.fillStyle = '#2a1d14'; ctx.fillRect(x - 9, y + 14 - (joue && Math.floor(b) % 2 ? 2 : 0), 6, 5); ctx.fillRect(x + 3, y + 14, 6, 5); // il bat la mesure du pied
+  ctx.save();
+  if (joue) { ctx.translate(x, y + 10); ctx.rotate(Math.sin(b * Math.PI) * 0.05); ctx.translate(-x, -(y + 10)); }
+  personne(x, y - (joue ? coup * 1.2 : 0), '#5b3a7a', '#e0b48e', '#2f6b3a', { assis: true, ceinture: true });
+  const yy = y - (joue ? coup * 1.2 : 0);
+  ctx.fillStyle = '#d64545'; ctx.fillRect(x + 5, yy - 28, 3, 9); // plume du chapeau
+  // luth : caisse bombée, manche vers la gauche
+  ctx.fillStyle = '#4a2a14'; ctx.fillRect(x - 27, yy - 3, 16, 4); ctx.fillRect(x - 31, yy - 5, 6, 5);
+  ctx.fillStyle = '#b07a3a'; ctx.beginPath(); ctx.ellipse(x - 2, yy + 3, 10, 8, -0.3, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#2a1708'; ctx.beginPath(); ctx.arc(x - 3, yy + 2, 2.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#e0b48e'; ctx.fillRect(x + 2, yy + (joue ? 4 - coup * 7 : 1), 5, 4); // main qui gratte les cordes
+  ctx.fillRect(x - 25, yy - 4, 4, 4);
+  ctx.restore();
+  if (joue) { // notes qui s'envolent
+    ctx.font = `bold 15px ${FONT}`; ctx.textAlign = 'center';
+    for (let i = 0; i < 3; i++) {
+      const ph = (t * 0.45 + i / 3) % 1;
+      ctx.globalAlpha = Math.min(1, (1 - ph) * 1.6) * Math.min(1, ph * 6);
+      ctx.fillStyle = '#f2d684'; ctx.fillText(i % 2 ? '♫' : '♪', x + 14 + Math.sin(ph * 6 + i * 2) * 8, y - 28 - ph * 46);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
 function etiquette(x, y, txt) {
   ctx.font = `13px ${FONT}`;
   const w = ctx.measureText(txt).width + 12;
@@ -557,8 +585,13 @@ function dessiner(t) {
   for (const d of DECOR) {
     for (let i = 0; i < 2; i++) { const by = d.y + i * 36; ctx.fillStyle = '#6e4628'; rr(d.x, by, d.w, 32, 7); ctx.fill(); ctx.fillStyle = '#2f2b28'; ctx.fillRect(d.x, by + 7, d.w, 3); ctx.fillRect(d.x, by + 22, d.w, 3); }
   }
+  // estrade du barde
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(ESTRADE.x + 3, ESTRADE.y + ESTRADE.h - 4, ESTRADE.w, 8);
+  ctx.fillStyle = '#4e3420'; ctx.fillRect(ESTRADE.x, ESTRADE.y + 10, ESTRADE.w, ESTRADE.h - 10);
+  ctx.fillStyle = '#6a4a2e'; ctx.fillRect(ESTRADE.x, ESTRADE.y, ESTRADE.w, 12);
+  ctx.fillStyle = '#3b2718'; for (let i = 1; i < 4; i++) ctx.fillRect(ESTRADE.x + i * ESTRADE.w / 4, ESTRADE.y, 2, 12);
   // tables, clients et tavernier triés en profondeur
-  const objets = [];
+  const objets = [{ y: ESTRADE.y + 30, f: () => barde(t) }];
   for (const tb of TABLES) objets.push({ y: tb.y + 22, f: () => {
     ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(tb.x - 30, tb.y + 16, 64, 10);
     ctx.fillStyle = '#3a2414'; ctx.fillRect(tb.x - 32, tb.y - 6, 64, 28);
@@ -922,7 +955,7 @@ const Musique = (() => {
     const fb = ac.createBiquadFilter(), gb = ac.createGain(); // bourdon de vielle, en continu
     fb.type = 'lowpass'; fb.frequency.value = 500; gb.gain.value = 0.035; fb.connect(gb); gb.connect(bus);
     bourdons = p.bourdon.map(nb => { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = freq(nb); o.connect(fb); o.start(); return o; });
-    curseurs = p.voix.map(() => ({ i: 0, t: t0 })); tTambour = t0; iTambour = 0;
+    curseurs = p.voix.map(() => ({ i: 0, t: t0, t0 })); tTambour = t0; iTambour = 0;
     planifier(); minuteur = setInterval(planifier, 80);
   }
   function maj(voulu) { // appelée à chaque image : change d'air si besoin
@@ -938,7 +971,9 @@ const Musique = (() => {
     const d = bruit.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   }
   document.addEventListener('visibilitychange', () => { if (ac && air >= 0) document.hidden ? ac.suspend() : ac.resume(); });
-  return { demarrer, maj, nom: n => AIRS[n].nom };
+  // pour le barde : le temps qui bat (en nombre de temps écoulés), ou null quand rien ne joue
+  const battement = () => ac && air >= 0 && ac.state === 'running' ? (ac.currentTime - curseurs[0].t0) / pistes[air].temps : null;
+  return { demarrer, maj, battement, nom: n => AIRS[n].nom };
 })();
 const airDuJour = () => (S.jour - 1) % AIRS.length;
 function basculerMusique() {
