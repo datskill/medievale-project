@@ -35,7 +35,9 @@ canvas{display:block;width:100%;height:auto}
 .ardoise{background:var(--ardoise);color:var(--craie);border:11px solid var(--chene);border-radius:5px;padding:14px 18px 18px;box-shadow:inset 0 0 50px rgba(0,0,0,.5),0 10px 30px rgba(0,0,0,.3);text-shadow:0 0 1px rgba(255,255,255,.25)}
 .ardoise h2{font-family:"IM Fell English SC",Georgia,serif;font-weight:400;font-size:1.6rem;margin:0}
 .ardoise h3{font-weight:400;font-style:italic;font-size:1.1rem;margin:18px 0 6px;padding-bottom:3px;border-bottom:1px dashed var(--craie-pale)}
+.lieu{margin:0;font-style:italic;color:var(--suif)}
 .moment{margin:0 0 10px;color:var(--craie-pale)}
+.rente{margin:0 0 10px;padding:6px 8px;border-left:3px solid var(--suif);background:rgba(232,198,106,.12);font-size:.92rem}
 .bourse{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
 .bourse span{display:block;font-size:.85rem;color:var(--craie-pale)}
 .bourse strong{font-weight:400;font-size:1.25rem}
@@ -141,12 +143,25 @@ const W = 800, H = 600, DUREE_SERVICE = 180, SAVE_KEY = 'taverne-chope-v1';
 const DATA = {
   ingredients: {
     // prix : cours moyen autour duquel le marché fluctue ; garde : nuits avant de pourrir (absent = se conserve)
-    orge:    { nom: 'Orge',    prix: 4 },
-    viande:  { nom: 'Viande',  prix: 6, garde: 2 },
-    legumes: { nom: 'Légumes', prix: 1 },
-    bois:    { nom: 'Bois',    prix: 1 },
-    pain:    { nom: 'Pain',    prix: 2, garde: 3 },
-    fromage: { nom: 'Fromage', prix: 3, garde: 4 },
+    // chaque taverne n'en vend qu'une partie au marché (voir DATA.tavernes)
+    orge:        { nom: 'Orge',         prix: 4 },
+    viande:      { nom: 'Viande',       prix: 6, garde: 2 },
+    legumes:     { nom: 'Légumes',      prix: 1 },
+    bois:        { nom: 'Bois',         prix: 1 },
+    pain:        { nom: 'Pain',         prix: 2, garde: 3 },
+    fromage:     { nom: 'Fromage',      prix: 3, garde: 4 },
+    miel:        { nom: 'Miel',         prix: 6 },
+    lard:        { nom: 'Lard',         prix: 8 },
+    choux:       { nom: 'Choux',        prix: 2, garde: 4 },
+    pommes:      { nom: 'Pommes',       prix: 2, garde: 5 },
+    raisin:      { nom: 'Raisin',       prix: 6, garde: 3 },
+    lapin:       { nom: 'Lapin',        prix: 12, garde: 2 },
+    oignons:     { nom: 'Oignons',      prix: 2 },
+    noix:        { nom: 'Noix',         prix: 4 },
+    epices:      { nom: 'Épices',       prix: 12 },
+    sanglier:    { nom: 'Sanglier',     prix: 18, garde: 2 },
+    champignons: { nom: 'Champignons',  prix: 3, garde: 2 },
+    amandes:     { nom: 'Amandes',      prix: 8 },
   },
   // le marché : chaque nuit le cours dérive au hasard puis revient peu à peu vers le prix moyen
   marche: { rappel: 0.3, ecart: 0.22, min: 0.5, max: 1.7, memoire: 7 },
@@ -156,32 +171,49 @@ const DATA = {
     { nom: 'Cellier voûté', cap: 50, prix: 50 },
     { nom: 'Grande cave', cap: 90, prix: 120 },
   ],
+  // poste : où se prépare la recette (tonneau = toute une nuit, chaudron = plat chaud, planche = plat froid vite fait)
+  // icone : forme et couleurs du dessin dans les bulles et dans les mains
   recettes: {
-    biere:   { nom: 'Bière', unite: 'chopes', article: 'une chope de bière', entrees: { orge: 3 }, rendement: 12, duree: 'nuit', prix: 3, perissable: false },
-    ragout:  { nom: 'Ragoût', unite: 'bols', article: 'un bol de ragoût', entrees: { viande: 1, legumes: 2, bois: 1 }, rendement: 6, duree: 30, prix: 5, perissable: true },
-    tartine: { nom: 'Pain et fromage', unite: 'assiettes', article: 'du pain et du fromage', entrees: { pain: 1, fromage: 1 }, rendement: 4, duree: 6, prix: 2, perissable: true },
+    biere:    { nom: 'Bière', poste: 'tonneau', unite: 'chopes', article: 'une chope de bière', entrees: { orge: 3 }, rendement: 12, duree: 'nuit', verbe: 'fermente', prix: 3, perissable: false, icone: { forme: 'chope', c: '#c88a2c' } },
+    ragout:   { nom: 'Ragoût', poste: 'chaudron', unite: 'bols', article: 'un bol de ragoût', entrees: { viande: 1, legumes: 2, bois: 1 }, rendement: 6, duree: 30, prix: 5, perissable: true, icone: { forme: 'bol', c: '#b5562a', c2: '#e0a040' } },
+    tartine:  { nom: 'Pain et fromage', poste: 'planche', unite: 'assiettes', article: 'du pain et du fromage', entrees: { pain: 1, fromage: 1 }, rendement: 4, duree: 6, prix: 2, perissable: true, icone: { forme: 'tartine' } },
+    hydromel: { nom: 'Hydromel', poste: 'tonneau', unite: 'coupes', article: 'une coupe d\'hydromel', entrees: { miel: 2 }, rendement: 10, duree: 'nuit', verbe: 'fermente', prix: 5, perissable: false, icone: { forme: 'chope', c: '#e8b84a' } },
+    potee:    { nom: 'Potée au lard', poste: 'chaudron', unite: 'bols', article: 'une potée au lard', entrees: { lard: 1, choux: 2, bois: 1 }, rendement: 6, duree: 30, prix: 7, perissable: true, icone: { forme: 'bol', c: '#8aa04a', c2: '#e8a0a0' } },
+    tourte:   { nom: 'Tourte aux pommes', poste: 'planche', unite: 'parts', article: 'une part de tourte', entrees: { pain: 1, pommes: 2 }, rendement: 4, duree: 8, prix: 4, perissable: true, icone: { forme: 'tourte', c: '#d39a4a' } },
+    vin:      { nom: 'Vin', poste: 'tonneau', unite: 'coupes', article: 'une coupe de vin', entrees: { raisin: 3 }, rendement: 12, duree: 'nuit', verbe: 'fermente', prix: 7, perissable: false, icone: { forme: 'coupe', c: '#7a1f2e' } },
+    civet:    { nom: 'Civet de lapin', poste: 'chaudron', unite: 'bols', article: 'un civet de lapin', entrees: { lapin: 1, oignons: 2, bois: 1 }, rendement: 6, duree: 35, prix: 10, perissable: true, icone: { forme: 'bol', c: '#5a2a1a', c2: '#d8c890' } },
+    plateau:  { nom: 'Fromages et noix', poste: 'planche', unite: 'plateaux', article: 'des fromages et des noix', entrees: { fromage: 1, noix: 1 }, rendement: 4, duree: 6, prix: 6, perissable: true, icone: { forme: 'plateau' } },
+    hypocras: { nom: 'Hypocras', poste: 'tonneau', unite: 'coupes', article: 'une coupe d\'hypocras', entrees: { raisin: 2, epices: 1 }, rendement: 10, duree: 'nuit', verbe: 'infuse', prix: 12, perissable: false, icone: { forme: 'coupe', c: '#a8402a', or: true } },
+    sanglier: { nom: 'Sanglier aux champignons', poste: 'chaudron', unite: 'plats', article: 'du sanglier aux champignons', entrees: { sanglier: 1, champignons: 2, bois: 1 }, rendement: 6, duree: 40, prix: 15, perissable: true, icone: { forme: 'bol', c: '#4a2a18', c2: '#c8b48a' } },
+    massepain:{ nom: 'Massepain', poste: 'planche', unite: 'douceurs', article: 'du massepain', entrees: { amandes: 1, miel: 1 }, rendement: 4, duree: 8, prix: 9, perissable: true, icone: { forme: 'douceurs' } },
   },
+  // commandes : par poste ; ce qu'on sert vraiment dépend de la taverne
   clients: [
-    { id: 'paysan',    titre: 'Le paysan',    poids: 6,   repMin: 0,  patience: 55, pourboire: 0.5, commandes: { biere: 5, tartine: 4, ragout: 2 }, habit: '#7a5a3a', tete: '#d9a87c', coiffe: '#4a3a28' },
-    { id: 'marchand',  titre: 'Le marchand',  poids: 3,   repMin: 20, patience: 45, pourboire: 1.5, commandes: { biere: 3, ragout: 4, tartine: 1 }, habit: '#2f5d50', tete: '#e0b48e', coiffe: '#6b1f2a' },
-    { id: 'chevalier', titre: 'Le chevalier', poids: 1.5, repMin: 40, patience: 38, pourboire: 3,   commandes: { ragout: 4, biere: 4 },             habit: '#8a9396', tete: '#d6a37a', coiffe: '#5d666a', casque: true },
+    { id: 'paysan',    titre: 'Le paysan',    poids: 6,   patience: 55, pourboire: 0.5, commandes: { tonneau: 5, planche: 4, chaudron: 2 }, habit: '#7a5a3a', tete: '#d9a87c', coiffe: '#4a3a28' },
+    { id: 'pelerin',   titre: 'Le pèlerin',   poids: 4,   patience: 70, pourboire: 0.5, commandes: { planche: 4, chaudron: 3, tonneau: 1 }, habit: '#6a5e4c', tete: '#d8aa82', coiffe: '#3e3426', chapeau: true },
+    { id: 'marchand',  titre: 'Le marchand',  poids: 3,   patience: 45, pourboire: 1.5, commandes: { tonneau: 3, chaudron: 4, planche: 1 }, habit: '#2f5d50', tete: '#e0b48e', coiffe: '#6b1f2a' },
+    { id: 'bourgeois', titre: 'Le bourgeois', poids: 3,   patience: 42, pourboire: 2,   commandes: { tonneau: 4, planche: 3, chaudron: 3 }, habit: '#3a4a7a', tete: '#e4b892', coiffe: '#1e2236' },
+    { id: 'chevalier', titre: 'Le chevalier', poids: 1.5, patience: 38, pourboire: 3,   commandes: { chaudron: 4, tonneau: 4 },             habit: '#8a9396', tete: '#d6a37a', coiffe: '#5d666a', casque: true },
+    { id: 'dame',      titre: 'La dame', f: true, poids: 2,   patience: 40, pourboire: 4,   commandes: { tonneau: 3, planche: 4, chaudron: 1 }, habit: '#7a2a5a', tete: '#ecc4a0', coiffe: '#c8a040' },
+    { id: 'seigneur',  titre: 'Le seigneur',  poids: 1,   patience: 34, pourboire: 6,   commandes: { chaudron: 4, tonneau: 3, planche: 2 }, habit: '#6b1f2a', tete: '#ddb08a', coiffe: '#e8c66a', couronne: true },
   ],
+  // prix de base : dans les tavernes plus grandes, tout coûte plus cher (voir cout de chaque taverne)
   equipement: {
     tonneau2: { nom: 'Second tonneau', prix: 60 },
   },
   // améliorations des postes, achetées le soir : chaque niveau multiplie la taille d'une fournée
   ameliorations: {
-    tartine: { poste: 'La planche', niveaux: [
+    planche: { poste: 'La planche', niveaux: [
       { nom: 'Petite planche', mult: 1 },
       { nom: 'Grande planche', mult: 2, prix: 30 },
-      { nom: 'Table du fromager', mult: 3, prix: 70 },
+      { nom: 'Table de l\'office', mult: 3, prix: 70 },
     ] },
-    ragout: { poste: 'Le chaudron', niveaux: [
+    chaudron: { poste: 'Le chaudron', niveaux: [
       { nom: 'Chaudron de fonte', mult: 1 },
       { nom: 'Grand chaudron', mult: 2, prix: 50 },
       { nom: 'Marmite de banquet', mult: 3, prix: 110 },
     ] },
-    biere: { poste: 'Les tonneaux', niveaux: [
+    tonneau: { poste: 'Les tonneaux', niveaux: [
       { nom: 'Tonneaux ordinaires', mult: 1 },
       { nom: 'Tonneaux cerclés de fer', mult: 2, prix: 60 },
       { nom: 'Foudres de chêne', mult: 3, prix: 130 },
@@ -201,13 +233,48 @@ const DATA = {
     tentures:  { nom: 'Tentures et bannières', effet: 'Réputation gagnée à chaque service +50 %',      prix: 90,  rep: 1.5 },
     trophees:  { nom: 'Trophées et blason',    effet: '+1 denier pour chaque plat servi',              prix: 120, bonus: 1 },
   },
+  // les tavernes, de la plus modeste à la plus grande. On achète la suivante le soir, quand on a les deniers
+  // et la réputation demandée ; l'ancienne passe à un gérant et verse une rente chaque soir.
+  // recettes : la recette de chaque poste ; clients : réputation à partir de laquelle chacun vient ;
+  // cout : multiplie le prix des améliorations ; tables : nombre de tables au départ (indice dans DATA.salle) ;
+  // rente : rente de base par soir, à 100 de réputation ; airs : indices dans AIRS ; decor : couleurs de la salle
+  tavernes: [
+    { nom: "La Chope d'Étain", lieu: 'le hameau', recit: "Ton oncle t'a laissé sa taverne, un tonneau de bière et quelques deniers. À toi de la faire vivre.",
+      recettes: { tonneau: 'biere', chaudron: 'ragout', planche: 'tartine' },
+      ingredients: ['orge', 'viande', 'legumes', 'bois', 'pain', 'fromage'],
+      stock: { orge: 3, viande: 1, legumes: 4, bois: 4, pain: 2, fromage: 2 },
+      clients: { paysan: 0, marchand: 20, chevalier: 40 },
+      cout: 1, tables: 1, rente: 20, airs: [0, 1, 2],
+      decor: { sol: ['#634430', '#5a3d27', '#43301f'], mur: 'pierre', murs: ['#4a443f', '#36312d'], cotes: '#3b3632' } },
+    { nom: 'Le Relais du Bourg', lieu: 'le bourg', prix: 500, repRequise: 75, recit: "Au carrefour des routes, le vieux relais de poste cherchait un tavernier. Les voyageurs y boivent l'hydromel du pays.",
+      recettes: { tonneau: 'hydromel', chaudron: 'potee', planche: 'tourte' },
+      ingredients: ['miel', 'lard', 'choux', 'bois', 'pain', 'pommes'],
+      stock: { miel: 2, lard: 1, choux: 4, bois: 4, pain: 2, pommes: 4 },
+      clients: { paysan: 0, pelerin: 0, marchand: 15, chevalier: 40 },
+      cout: 2, tables: 2, rente: 45, airs: [3, 4],
+      decor: { sol: ['#7a5636', '#704e30', '#4e3520'], mur: 'colombage', murs: ['#d8c8a4', '#4a3220'], cotes: '#5a4030' } },
+    { nom: "L'Hostellerie du Lion d'Or", lieu: 'la ville', prix: 1500, repRequise: 80, recit: "Une hostellerie de pierre sur la grand-place, où les marchands concluent leurs affaires autour d'une coupe de vin.",
+      recettes: { tonneau: 'vin', chaudron: 'civet', planche: 'plateau' },
+      ingredients: ['raisin', 'lapin', 'oignons', 'bois', 'fromage', 'noix'],
+      stock: { raisin: 3, lapin: 1, oignons: 4, bois: 4, fromage: 2, noix: 2 },
+      clients: { marchand: 0, pelerin: 0, bourgeois: 15, chevalier: 35, dame: 60 },
+      cout: 3.5, tables: 2, rente: 90, airs: [5, 6],
+      decor: { sol: ['#8a8070', '#7a7062', '#5a5246'], dalles: true, mur: 'pierre', murs: ['#7a7268', '#5e574f'], cotes: '#4e4842' } },
+    { nom: 'La Grande Salle du Château', lieu: 'le château', prix: 4000, repRequise: 85, recit: "Le seigneur te confie les cuisines et la grande salle de son château. Ici, on sert les nobles et leurs invités.",
+      recettes: { tonneau: 'hypocras', chaudron: 'sanglier', planche: 'massepain' },
+      ingredients: ['raisin', 'epices', 'sanglier', 'champignons', 'bois', 'amandes', 'miel'],
+      stock: { raisin: 2, epices: 1, sanglier: 1, champignons: 2, bois: 4, amandes: 2, miel: 2 },
+      clients: { bourgeois: 0, chevalier: 0, dame: 30, seigneur: 55 },
+      cout: 5, tables: 3, rente: 0, airs: [7, 8],
+      decor: { sol: ['#6e3a2e', '#9a8462', '#4a2a22'], dalles: true, mur: 'pierre', murs: ['#6a6a72', '#4e4e56'], cotes: '#3e3e46', tapis: '#7a1f2e' } },
+  ],
 };
 
 const STATIONS = [
-  { id: 'tonneau1', type: 'tonneau',  recette: 'biere',   x: 90 },
-  { id: 'tonneau2', type: 'tonneau',  recette: 'biere',   x: 170, equip: 'tonneau2' },
-  { id: 'chaudron', type: 'chaudron', recette: 'ragout',  x: 330 },
-  { id: 'planche',  type: 'planche',  recette: 'tartine', x: 540 },
+  { id: 'tonneau1', type: 'tonneau',  x: 90 },
+  { id: 'tonneau2', type: 'tonneau',  x: 170, equip: 'tonneau2' },
+  { id: 'chaudron', type: 'chaudron', x: 330 },
+  { id: 'planche',  type: 'planche',  x: 540 },
 ];
 // les deux dernières tables n'apparaissent qu'une fois la salle agrandie
 const TABLES = [{ x: 220, y: 290 }, { x: 460, y: 290 }, { x: 220, y: 440 }, { x: 460, y: 440 }, { x: 620, y: 440 }, { x: 620, y: 200 }];
@@ -254,9 +321,15 @@ function courbe(k) { // petit histogramme des prix des derniers jours, le dernie
   return vals.map(v => `<i style="height:${Math.round(v / hi * 12)}px"></i>`).join('');
 }
 const typeClient = id => DATA.clients.find(t => t.id === id);
+const POSTES = ['tonneau', 'chaudron', 'planche'];
+const taverne = () => DATA.tavernes[S.taverne];
+const recetteDu = poste => taverne().recettes[poste];          // id de la recette préparée à ce poste
+const recetteDe = s => recetteDu(s.type);                      // … et à cette station
+const ingredientsTaverne = () => taverne().ingredients;
+const prixTaverne = p => Math.round(p * taverne().cout / 5) * 5; // les améliorations coûtent plus cher dans les grandes tavernes
 const stationsActives = () => STATIONS.filter(s => !s.equip || S.equip[s.equip]);
-const multPoste = id => DATA.ameliorations[id].niveaux[S.niveaux[id] - 1].mult;
-const fourneeMax = id => DATA.recettes[id].rendement * multPoste(id);
+const multPoste = poste => DATA.ameliorations[poste].niveaux[S.niveaux[poste] - 1].mult;
+const fourneeMax = poste => DATA.recettes[recetteDu(poste)].rendement * multPoste(poste);
 const nbTables = () => DATA.salle[S.tables - 1].tables;
 const tablesActives = () => TABLES.slice(0, nbTables());
 const siegesActifs = () => SIEGES.filter(s => s.table < nbTables());
@@ -275,40 +348,69 @@ const aPourrir = () => Object.keys(DATA.ingredients).filter(k => vieux(k) > 0).m
 const decoActives = () => Object.keys(DATA.decorations).filter(id => S.deco[id]).map(id => DATA.decorations[id]);
 const multDeco = k => decoActives().reduce((m, d) => m * (d[k] || 1), 1);
 const bonusDeco = () => decoActives().reduce((n, d) => n + (d.bonus || 0), 0);
+// rente d'une taverne en gérance : sa base selon la réputation laissée, plus un centième de ce qu'on y a investi
+const renteDe = g => Math.round(DATA.tavernes[g.taverne].rente * g.rep / 100 + g.investi / 100);
+const rentes = () => S.gerances.reduce((n, g) => n + renteDe(g), 0);
+const prochaineTaverne = () => DATA.tavernes[S.taverne + 1];
 
 /* ---------- état et sauvegarde ---------- */
-function nouvellePartie() {
-  const cours = premiersCours(), s = {
-    version: 1, jour: 1, deniers: 40, rep: 30, dette: 0, introVue: false, tutoVu: false, musique: true,
-    stock: { orge: 3, viande: 1, legumes: 4, bois: 4, pain: 2, fromage: 2 },
+// tout ce qui appartient à une taverne : on repart de là à chaque déménagement
+function etatTaverne(n) {
+  const tv = DATA.tavernes[n], s = {
+    taverne: n, rep: 30, investi: 0,
+    stock: {}, lots: {},
     stations: {
-      tonneau1: { portions: 12, enCours: false, reste: 0 },
+      tonneau1: { portions: DATA.recettes[tv.recettes.tonneau].rendement, enCours: false, reste: 0 }, // cadeau de l'ancien tenancier
       tonneau2: { portions: 0, enCours: false, reste: 0 },
       chaudron: { portions: 0, enCours: false, reste: 0 },
       planche:  { portions: 0, enCours: false, reste: 0 },
     },
     equip: { tonneau2: false },
-    niveaux: { tartine: 1, ragout: 1, biere: 1 },
-    tables: 1, deco: {}, reserve: 1,
-    cours, prix: prixDuCours(cours), histo: {}, lots: {},
+    niveaux: { planche: 1, chaudron: 1, tonneau: 1 },
+    tables: tv.tables, deco: {}, reserve: 1,
   };
   for (const [k, ing] of Object.entries(DATA.ingredients)) {
-    s.histo[k] = [];
+    s.stock[k] = tv.stock[k] || 0;
     if (ing.garde) s.lots[k] = [s.stock[k], ...Array(ing.garde - 1).fill(0)];
   }
   return s;
 }
+function nouvellePartie() {
+  const cours = premiersCours(), s = {
+    version: 2, jour: 1, deniers: 40, dette: 0, introVue: false, tutoVu: false, musique: true,
+    gerances: [], // tavernes laissées à un gérant : { taverne, rep, investi }
+    cours, prix: prixDuCours(cours), histo: {},
+    ...etatTaverne(0),
+  };
+  for (const k in DATA.ingredients) s.histo[k] = [];
+  return s;
+}
+// ce qu'une partie d'avant les tavernes a déjà dépensé en améliorations (pour sa rente future)
+function investiEstime(s) {
+  let n = 0;
+  for (const [k, am] of Object.entries(DATA.ameliorations)) for (let i = 1; i < s.niveaux[k]; i++) n += am.niveaux[i].prix;
+  for (let i = 1; i < s.tables; i++) n += DATA.salle[i].prix;
+  for (let i = 1; i < s.reserve; i++) n += DATA.reserve[i].prix;
+  for (const k in DATA.decorations) if (s.deco[k]) n += DATA.decorations[k].prix;
+  for (const k in DATA.equipement) if (s.equip[k]) n += DATA.equipement[k].prix;
+  return n;
+}
 function charger() {
-  let s = nouvellePartie();
+  let s = nouvellePartie(), ancienne = false;
   try {
     const txt = localStorage.getItem(SAVE_KEY);
     if (txt) {
       const lu = JSON.parse(txt);
       if (!lu.cours && lu.prix) lu.cours = { ...lu.prix }; // sauvegarde d'avant les cours : on part des prix du jour
+      // sauvegarde d'avant les tavernes : les améliorations étaient rangées par recette, elles le sont par poste
+      if (lu.niveaux && lu.niveaux.tonneau == null) lu.niveaux = { planche: lu.niveaux.tartine, chaudron: lu.niveaux.ragout, tonneau: lu.niveaux.biere };
+      ancienne = lu.taverne == null;
       s = Object.assign(s, lu);
     }
   } catch (e) { /* pas de sauvegarde lisible : nouvelle partie */ }
   // compléter les champs ajoutés par de futures versions
+  s.taverne = clamp(s.taverne || 0, 0, DATA.tavernes.length - 1);
+  if (!Array.isArray(s.gerances)) s.gerances = [];
   for (const k in DATA.ingredients) { if (s.stock[k] == null) s.stock[k] = 0; if (s.prix[k] == null) s.prix[k] = DATA.ingredients[k].prix; }
   for (const st of STATIONS) if (!s.stations[st.id]) s.stations[st.id] = { portions: 0, enCours: false, reste: 0 };
   for (const k in DATA.equipement) if (s.equip[k] == null) s.equip[k] = false;
@@ -316,6 +418,8 @@ function charger() {
   s.tables = clamp(s.tables || 1, 1, DATA.salle.length);
   for (const k in DATA.decorations) s.deco[k] = !!s.deco[k];
   s.reserve = clamp(s.reserve || 1, 1, DATA.reserve.length);
+  if (ancienne) s.investi = investiEstime(s);
+  s.version = 2;
   for (const k in DATA.ingredients) {
     if (s.cours[k] == null) s.cours[k] = s.prix[k];
     if (!Array.isArray(s.histo[k])) s.histo[k] = [];
@@ -398,12 +502,12 @@ function interagir() {
     P.mains.splice(i, 1);
     servir(cl);
   } else {
-    const s = c.o, st = S.stations[s.id], rec = DATA.recettes[s.recette];
+    const s = c.o, st = S.stations[s.id], rec = DATA.recettes[recetteDe(s)];
     if (st.portions > 0) {
       if (P.mains.length >= 2) { message('Tes deux mains sont prises. Sers un client d\'abord.'); return; }
-      st.portions--; P.mains.push(s.recette);
+      st.portions--; P.mains.push(recetteDe(s));
     } else if (st.enCours) {
-      message(rec.duree === 'nuit' ? 'La bière fermente, elle sera prête demain matin.' : `${rec.nom} en cours, encore ${Math.ceil(st.reste)} s.`);
+      message(rec.duree === 'nuit' ? `${rec.nom} ${rec.verbe}, prêt demain matin.` : `${rec.nom} en cours, encore ${Math.ceil(st.reste)} s.`);
     } else {
       message(`Plus de ${rec.nom.toLowerCase()} ici. Appuie sur R pour préparer une fournée.`);
     }
@@ -412,7 +516,7 @@ function interagir() {
 function preparer() {
   if (R.overlay || R.phase === 'soir') return;
   const c = cible(); if (!c || c.t !== 'station') return;
-  const s = c.o, st = S.stations[s.id], rec = DATA.recettes[s.recette];
+  const s = c.o, st = S.stations[s.id], rec = DATA.recettes[recetteDe(s)];
   if (st.enCours) { message('Une fournée est déjà en cours ici.'); return; }
   const manque = Object.entries(rec.entrees).filter(([i, n]) => S.stock[i] < n);
   if (manque.length) {
@@ -420,11 +524,11 @@ function preparer() {
     return;
   }
   // un poste amélioré prépare plusieurs lots d'un coup, autant que la réserve le permet
-  const lots = Math.min(multPoste(s.recette), ...Object.entries(rec.entrees).map(([i, n]) => Math.floor(S.stock[i] / n)));
+  const lots = Math.min(multPoste(s.type), ...Object.entries(rec.entrees).map(([i, n]) => Math.floor(S.stock[i] / n)));
   for (const [i, n] of Object.entries(rec.entrees)) retirerStock(i, n * lots);
   st.enCours = true; st.reste = rec.duree === 'nuit' ? 0 : rec.duree; st.fournee = rec.rendement * lots;
-  const pas = lots < multPoste(s.recette) ? ` (${st.fournee} ${rec.unite} seulement, la réserve est courte)` : '';
-  message((rec.duree === 'nuit' ? 'Brassage lancé : la bière sera prête demain matin' : `${rec.nom} lancé, prêt dans ${rec.duree} s`) + pas + '.');
+  const pas = lots < multPoste(s.type) ? ` (${st.fournee} ${rec.unite} seulement, la réserve est courte)` : '';
+  message((rec.duree === 'nuit' ? `${rec.nom} mis en tonneau : prêt demain matin` : `${rec.nom} lancé, prêt dans ${rec.duree} s`) + pas + '.');
   if (R.phase === 'matin') sauver();
 }
 function servir(cl) {
@@ -440,10 +544,11 @@ function servir(cl) {
 /* ---------- clients ---------- */
 function faireVenir() {
   const libres = siegesActifs().filter(s => !s.occ); if (!libres.length) return;
-  const t = tirage(DATA.clients.filter(c => S.rep >= c.repMin).map(c => [c, c.poids]));
+  const repMin = taverne().clients;
+  const t = tirage(DATA.clients.filter(c => repMin[c.id] != null && S.rep >= repMin[c.id]).map(c => [c, c.poids]));
   const siege = libres[Math.floor(Math.random() * libres.length)];
   const c = {
-    id: ++R.uid, type: t.id, x: ALLEE_X, y: 615, siege, commande: tirage(Object.entries(t.commandes)),
+    id: ++R.uid, type: t.id, x: ALLEE_X, y: 615, siege, commande: recetteDu(tirage(Object.entries(t.commandes))),
     etat: 'arrive', patienceMax: t.patience * multDeco('patience'), patience: t.patience * multDeco('patience'), mange: 0, marche: 0, fache: false,
     chemin: [{ x: ALLEE_X, y: siege.y + 55 }, { x: siege.x, y: siege.y + 55 }, { x: siege.x, y: siege.y }],
   };
@@ -462,20 +567,22 @@ function ouvrir() {
 }
 function finJournee() {
   R.phase = 'soir';
-  for (const r of P.mains) { const s = stationsActives().find(s => s.recette === r); if (s) S.stations[s.id].portions++; }
+  for (const r of P.mains) { const s = stationsActives().find(s => recetteDe(s) === r); if (s) S.stations[s.id].portions++; }
   P.mains = [];
   if (S.dette > 0) {
     const remb = Math.min(S.dette, Math.ceil(R.stats.recette * 0.25), S.deniers);
     S.dette -= remb; S.deniers -= remb; R.stats.remb = remb;
   }
+  // les tavernes confiées à un gérant versent leur rente
+  R.stats.rentes = rentes(); S.deniers += R.stats.rentes;
   R.overlay = 'bilan';
   afficherOverlay();
 }
 function nuit() {
   const notes = [];
   for (const s of stationsActives()) {
-    const st = S.stations[s.id], rec = DATA.recettes[s.recette];
-    if (st.enCours) { st.enCours = false; st.portions += st.fournee || rec.rendement; if (rec.duree === 'nuit') notes.push('La bière brassée hier est prête'); }
+    const st = S.stations[s.id], rec = DATA.recettes[recetteDe(s)];
+    if (st.enCours) { st.enCours = false; st.portions += st.fournee || rec.rendement; if (rec.duree === 'nuit') notes.push(`${rec.nom} d'hier est prêt`); }
     if (rec.perissable && st.portions > 0) {
       const perdu = Math.ceil(st.portions / 2); st.portions -= perdu;
       notes.push(`${perdu} ${rec.unite} de ${rec.nom.toLowerCase()} ont tourné pendant la nuit`);
@@ -500,7 +607,7 @@ function nuit() {
   message(`Jour ${S.jour}. ` + (notes.length ? notes.join('. ') + '.' : 'Le marché est ouvert.'));
 }
 function basculerPause() {
-  if (R.overlay === 'intro' || R.overlay === 'bilan' || R.overlay === 'tuto') return;
+  if (['intro', 'bilan', 'tuto', 'demenager', 'arrivee'].includes(R.overlay)) return;
   R.overlay = R.overlay === 'pause' ? null : 'pause';
   afficherOverlay();
 }
@@ -520,7 +627,7 @@ function maj(dt) {
   }
   // fournées
   for (const s of stationsActives()) {
-    const st = S.stations[s.id], rec = DATA.recettes[s.recette];
+    const st = S.stations[s.id], rec = DATA.recettes[recetteDe(s)];
     if (st.enCours && rec.duree !== 'nuit') {
       st.reste -= dt;
       if (st.reste <= 0) { const n = st.fournee || rec.rendement; st.enCours = false; st.portions += n; message(`${rec.nom} prêt : ${n} ${rec.unite}.`); }
@@ -556,7 +663,7 @@ function maj(dt) {
       c.patience -= dt;
       if (c.patience <= 0) {
         c.fache = true; S.rep = clamp(S.rep - 3); R.stats.partis++;
-        message(`${typeClient(c.type).titre} est reparti sans être servi.`);
+        message(`${typeClient(c.type).titre} est reparti${typeClient(c.type).f ? 'e' : ''} sans être servi${typeClient(c.type).f ? 'e' : ''}.`);
         partir(c);
       }
     } else if (c.etat === 'mange') {
@@ -578,18 +685,35 @@ function rr(x, y, w, h, r) {
   ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + r, y + h);
   ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
 }
-function icone(type, x, y, s = 1) {
+function icone(id, x, y, s = 1) {
+  const ic = DATA.recettes[id].icone;
   ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
-  if (type === 'biere') {
-    ctx.fillStyle = '#c88a2c'; ctx.fillRect(-6, -5, 12, 13);
+  if (ic.forme === 'chope') { // chope d'étain, mousse claire
+    ctx.fillStyle = ic.c; ctx.fillRect(-6, -5, 12, 13);
     ctx.fillStyle = '#f4efe2'; ctx.fillRect(-7, -9, 14, 5);
     ctx.strokeStyle = '#6b4a2a'; ctx.lineWidth = 2; ctx.strokeRect(6, -3, 4, 7);
-    ctx.fillStyle = '#8a5a22'; ctx.fillRect(-6, 6, 12, 2);
-  } else if (type === 'ragout') {
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(-6, 6, 12, 2);
+  } else if (ic.forme === 'coupe') { // coupe à pied, d'étain ou d'or
+    const metal = ic.or ? '#d8b040' : '#a8b0b2';
+    ctx.fillStyle = metal; ctx.beginPath(); ctx.moveTo(-8, -8); ctx.lineTo(8, -8); ctx.quadraticCurveTo(8, 2, 0, 3); ctx.quadraticCurveTo(-8, 2, -8, -8); ctx.fill();
+    ctx.fillStyle = ic.c; ctx.beginPath(); ctx.ellipse(0, -7, 7, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = metal; ctx.fillRect(-1, 3, 3, 5); ctx.fillRect(-5, 8, 11, 2);
+  } else if (ic.forme === 'bol') {
     ctx.fillStyle = '#6e3b1f'; ctx.beginPath(); ctx.arc(0, -1, 9, 0, Math.PI); ctx.fill();
-    ctx.fillStyle = '#b5562a'; ctx.fillRect(-9, -3, 18, 3);
-    ctx.fillStyle = '#e0a040'; ctx.fillRect(-4, -5, 3, 2); ctx.fillRect(2, -4, 3, 2);
-  } else {
+    ctx.fillStyle = ic.c; ctx.fillRect(-9, -3, 18, 3);
+    ctx.fillStyle = ic.c2; ctx.fillRect(-4, -5, 3, 2); ctx.fillRect(2, -4, 3, 2);
+  } else if (ic.forme === 'tourte') { // part de tourte dorée, croisillons
+    ctx.fillStyle = ic.c; ctx.beginPath(); ctx.moveTo(-9, 6); ctx.lineTo(9, 6); ctx.lineTo(0, -8); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#8a5a22'; ctx.fillRect(-9, 4, 18, 3);
+    ctx.fillStyle = '#f0c878'; ctx.fillRect(-3, -1, 6, 1); ctx.fillRect(-5, 2, 10, 1);
+  } else if (ic.forme === 'plateau') { // fromage en pointe et noix
+    ctx.fillStyle = '#8a5f35'; ctx.beginPath(); ctx.ellipse(0, 4, 11, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#e8c84a'; ctx.beginPath(); ctx.moveTo(-8, 3); ctx.lineTo(3, 3); ctx.lineTo(3, -6); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#7a4a24'; for (const [nx, ny] of [[6, 1], [9, 3], [6, 4]]) { ctx.beginPath(); ctx.arc(nx, ny, 2, 0, Math.PI * 2); ctx.fill(); }
+  } else if (ic.forme === 'douceurs') { // petites pâtes d'amande sur une assiette
+    ctx.fillStyle = '#e8e0cc'; ctx.beginPath(); ctx.ellipse(0, 4, 11, 4, 0, 0, Math.PI * 2); ctx.fill();
+    for (const [dx, dy, c] of [[-5, 0, '#f0d8a8'], [1, -1, '#e8a0b0'], [6, 1, '#b8d890'], [-1, -5, '#f0d8a8']]) { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(dx, dy, 3, 0, Math.PI * 2); ctx.fill(); }
+  } else { // pain et fromage
     ctx.fillStyle = '#c9924f'; ctx.beginPath(); ctx.ellipse(-2, 0, 8, 6, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#9a6a35'; ctx.fillRect(-6, -1, 8, 1);
     ctx.fillStyle = '#e8c84a'; ctx.beginPath(); ctx.moveTo(1, 6); ctx.lineTo(11, 6); ctx.lineTo(11, -3); ctx.closePath(); ctx.fill();
@@ -610,6 +734,8 @@ function personne(x, y, habit, tete, coiffe, o = {}) {
   ctx.fillStyle = tete; ctx.fillRect(x - 7, y - 20, 14, 14);
   ctx.fillStyle = coiffe;
   if (o.casque) { ctx.fillRect(x - 8, y - 22, 16, 10); ctx.fillStyle = '#2b2f31'; ctx.fillRect(x - 6, y - 15, 12, 2); }
+  else if (o.chapeau) { ctx.fillRect(x - 13, y - 21, 26, 4); ctx.fillRect(x - 7, y - 27, 14, 7); ctx.fillStyle = '#e8e0cc'; ctx.fillRect(x - 2, y - 25, 4, 3); ctx.fillStyle = '#2a1d14'; ctx.fillRect(x - 4, y - 13, 2, 2); ctx.fillRect(x + 2, y - 13, 2, 2); } // chapeau de pèlerin et sa coquille
+  else if (o.couronne) { ctx.fillRect(x - 8, y - 24, 16, 5); ctx.fillRect(x - 8, y - 28, 3, 4); ctx.fillRect(x - 1.5, y - 29, 3, 5); ctx.fillRect(x + 5, y - 28, 3, 4); ctx.fillStyle = '#2a1d14'; ctx.fillRect(x - 4, y - 13, 2, 2); ctx.fillRect(x + 2, y - 13, 2, 2); }
   else { ctx.fillRect(x - 8, y - 22, 16, 6); ctx.fillStyle = '#2a1d14'; ctx.fillRect(x - 4, y - 13, 2, 2); ctx.fillRect(x + 2, y - 13, 2, 2); }
 }
 function barde(t) {
@@ -658,18 +784,18 @@ function dessinerStation(s, t) {
   } else if (s.type === 'chaudron') {
     ctx.fillStyle = '#1e1c1b'; ctx.beginPath(); ctx.ellipse(330, 104, 27, 20, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#34302d'; ctx.beginPath(); ctx.ellipse(330, 89, 25, 7, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = (st.portions > 0 || st.enCours) ? '#9a4a22' : '#141211'; ctx.beginPath(); ctx.ellipse(330, 89, 20, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = (st.portions > 0 || st.enCours) ? DATA.recettes[recetteDe(s)].icone.c : '#141211'; ctx.beginPath(); ctx.ellipse(330, 89, 20, 5, 0, 0, Math.PI * 2); ctx.fill();
     if (st.enCours) { for (let i = 0; i < 3; i++) { const b = (t * 0.5 + i / 3) % 1; ctx.fillStyle = `rgba(230,225,215,${0.45 * (1 - b)})`; ctx.beginPath(); ctx.arc(322 + i * 8 + Math.sin(t * 2 + i) * 3, 82 - b * 34, 4 + b * 5, 0, Math.PI * 2); ctx.fill(); } }
   } else {
     ctx.fillStyle = '#a87a4a'; rr(508, 92, 64, 26, 4); ctx.fill();
     ctx.fillStyle = '#8a5f35'; ctx.fillRect(508, 112, 64, 6);
     const n = Math.min(st.portions, 8), rangs = n > 4 ? 2 : 1;
-    for (let i = 0; i < n; i++) icone('tartine', 520 + (i % 4) * 14, rangs === 2 ? 98 + Math.floor(i / 4) * 9 : 102, 0.7);
+    for (let i = 0; i < n; i++) icone(recetteDe(s), 520 + (i % 4) * 14, rangs === 2 ? 98 + Math.floor(i / 4) * 9 : 102, 0.7);
     if (st.enCours) { ctx.fillStyle = '#c9cfd2'; ctx.fillRect(545 + Math.sin(t * 14) * 6, 96, 3, 14); }
   }
-  const rec = DATA.recettes[s.recette];
+  const rec = DATA.recettes[recetteDe(s)];
   let txt;
-  if (st.enCours) txt = rec.duree === 'nuit' ? (st.portions ? `${st.portions} ${rec.unite}, brassage en cours` : 'Brassage, prêt demain') : `${rec.nom} ${Math.ceil(st.reste)} s`;
+  if (st.enCours) txt = rec.duree === 'nuit' ? (st.portions ? `${st.portions} ${rec.unite}, la suite ${rec.verbe}` : `${rec.nom}, prêt demain`) : `${rec.nom} ${Math.ceil(st.reste)} s`;
   else txt = st.portions > 0 ? `${st.portions} ${rec.unite}` : 'Vide (R)';
   etiquette(s.x, 150, txt);
 }
@@ -679,7 +805,7 @@ function banniere(bx, coul, croix) {
   ctx.fillStyle = coul; ctx.beginPath(); ctx.moveTo(bx - 11, 7); ctx.lineTo(bx + 11, 7); ctx.lineTo(bx + 11, 58); ctx.lineTo(bx, 50); ctx.lineTo(bx - 11, 58); ctx.closePath(); ctx.fill();
   ctx.fillStyle = '#e8c66a'; ctx.fillRect(bx - 11, 11, 22, 2);
   if (croix) { ctx.fillRect(bx - 2, 19, 4, 22); ctx.fillRect(bx - 8, 25, 16, 4); }
-  else icone('biere', bx, 30, 0.8);
+  else icone(recetteDu('tonneau'), bx, 30, 0.8);
 }
 function lanterne(x, y, t, nuitF) {
   ctx.fillStyle = '#1f1b18'; ctx.fillRect(x - 1, y - 18, 2, 8);
@@ -726,21 +852,41 @@ function dessinerDeco(t, nuitF) {
 
 function dessiner(t) {
   const nuitF = R.phase === 'service' ? Math.min(1, R.horloge / DUREE_SERVICE) : R.phase === 'soir' ? 1 : 0;
-  // sol
-  ctx.fillStyle = '#5e4029'; ctx.fillRect(0, 0, W, H);
-  for (let y = 130, i = 0; y < 580; y += 22, i++) {
-    ctx.fillStyle = i % 2 ? '#634430' : '#5a3d27'; ctx.fillRect(30, y, 740, 22);
-    ctx.fillStyle = '#43301f'; ctx.fillRect(30, y, 740, 2);
-    for (let x = 30 + (i % 3) * 60; x < 770; x += 180) ctx.fillRect(x, y, 2, 22);
+  const dc = taverne().decor;
+  // sol : planches de bois, ou dalles dans les tavernes de pierre
+  ctx.fillStyle = dc.sol[2]; ctx.fillRect(0, 0, W, H);
+  if (dc.dalles) {
+    for (let y = 130, i = 0; y < 580; y += 30, i++) for (let x = 30, j = 0; x < 770; x += 30, j++) {
+      ctx.fillStyle = (i + j) % 2 ? dc.sol[0] : dc.sol[1]; ctx.fillRect(x + 1, y + 1, 28, 28);
+    }
+  } else {
+    for (let y = 130, i = 0; y < 580; y += 22, i++) {
+      ctx.fillStyle = i % 2 ? dc.sol[0] : dc.sol[1]; ctx.fillRect(30, y, 740, 22);
+      ctx.fillStyle = dc.sol[2]; ctx.fillRect(30, y, 740, 2);
+      for (let x = 30 + (i % 3) * 60; x < 770; x += 180) ctx.fillRect(x, y, 2, 22);
+    }
   }
-  // murs
-  ctx.fillStyle = '#4a443f'; ctx.fillRect(0, 0, W, 72);
-  ctx.strokeStyle = '#36312d'; ctx.lineWidth = 2;
-  for (let r = 0; r < 4; r++) {
-    const y = r * 18; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-    for (let x = (r % 2) * 24; x < W; x += 48) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 18); ctx.stroke(); }
+  if (dc.tapis) { // long tapis de l'entrée jusqu'au comptoir
+    ctx.fillStyle = dc.tapis; ctx.fillRect(ALLEE_X - 24, 130, 48, 450);
+    ctx.fillStyle = '#e8c66a'; ctx.fillRect(ALLEE_X - 20, 130, 2, 450); ctx.fillRect(ALLEE_X + 18, 130, 2, 450);
   }
-  ctx.fillStyle = '#3b3632'; ctx.fillRect(0, 0, 30, H); ctx.fillRect(770, 0, 30, H); ctx.fillRect(0, 575, W, 25);
+  // murs : pierres appareillées, ou colombages (torchis clair et poutres)
+  ctx.fillStyle = dc.murs[0]; ctx.fillRect(0, 0, W, 72);
+  if (dc.mur === 'colombage') {
+    ctx.fillStyle = dc.murs[1]; ctx.fillRect(0, 0, W, 5); ctx.fillRect(0, 34, W, 4);
+    for (let x = 0; x < W; x += 80) {
+      ctx.fillRect(x, 0, 6, 72);
+      ctx.save(); ctx.beginPath(); ctx.rect(x, 38, 80, 34); ctx.clip();
+      ctx.lineWidth = 5; ctx.strokeStyle = dc.murs[1]; ctx.beginPath(); ctx.moveTo(x, 72); ctx.lineTo(x + 80, 38); ctx.stroke(); ctx.restore();
+    }
+  } else {
+    ctx.strokeStyle = dc.murs[1]; ctx.lineWidth = 2;
+    for (let r = 0; r < 4; r++) {
+      const y = r * 18; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      for (let x = (r % 2) * 24; x < W; x += 48) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 18); ctx.stroke(); }
+    }
+  }
+  ctx.fillStyle = dc.cotes; ctx.fillRect(0, 0, 30, H); ctx.fillRect(770, 0, 30, H); ctx.fillRect(0, 575, W, 25);
   ctx.fillStyle = '#21160d'; ctx.fillRect(310, 575, 60, 25);
   ctx.fillStyle = '#6b4a2e'; ctx.fillRect(306, 575, 4, 25); ctx.fillRect(370, 575, 4, 25);
   // fenêtre
@@ -791,7 +937,7 @@ function dessiner(t) {
   for (const c of R.clients) {
     const ty = typeClient(c.type);
     objets.push({ y: c.y + 15, f: () => {
-      personne(c.x, c.y, ty.habit, ty.tete, ty.coiffe, { marche: c.chemin.length ? c.marche : 0, assis: !c.chemin.length && c.etat !== 'part', casque: ty.casque, ceinture: true });
+      personne(c.x, c.y, ty.habit, ty.tete, ty.coiffe, { marche: c.chemin.length ? c.marche : 0, assis: !c.chemin.length && c.etat !== 'part', casque: ty.casque, chapeau: ty.chapeau, couronne: ty.couronne, ceinture: true });
       if (c.etat === 'mange') icone(c.commande, c.x + c.siege.cote * 24, c.y - 14, 0.8);
     } });
   }
@@ -860,21 +1006,23 @@ function heure() {
 }
 function rendrePanel() {
   const ph = R.phase;
-  let h = `<h2>Jour ${S.jour}</h2><p class="moment">${ph === 'matin' ? 'Le matin, le marché est ouvert.' : ph === 'service' ? (R.ferme ? 'Fermeture, les derniers clients s\'en vont.' : `Service en cours, ${heure()}`) : 'La nuit est tombée.'}</p>`;
+  let h = `<h2>Jour ${S.jour}</h2><p class="lieu">${taverne().nom}, ${taverne().lieu}</p><p class="moment">${ph === 'matin' ? 'Le matin, le marché est ouvert.' : ph === 'service' ? (R.ferme ? 'Fermeture, les derniers clients s\'en vont.' : `Service en cours, ${heure()}`) : 'La nuit est tombée.'}</p>`;
   h += `<div class="bourse"><div><span>Bourse</span><strong>${S.deniers} deniers</strong></div><div><span>Réputation</span><strong>${Math.round(S.rep)} / 100</strong><div class="jauge"><i style="width:${S.rep}%"></i></div></div></div>`;
   if (S.dette > 0) h += `<p class="dette">Tu dois ${S.dette} deniers au seigneur. Un quart des recettes de chaque soir sert à le rembourser.</p>`;
+  if (S.gerances.length) h += `<p class="rente">Rentes de tes gérants : +${rentes()} d chaque soir</p>`;
   if (ph === 'matin') h += `<button class="principal" data-a="ouvrir">Ouvrir la taverne</button>`;
   h += '<h3>Plats prêts</h3><ul class="plats">';
-  for (const [id, rec] of Object.entries(DATA.recettes)) {
-    const ss = stationsActives().filter(s => s.recette === id);
+  for (const poste of POSTES) {
+    const rec = DATA.recettes[recetteDu(poste)];
+    const ss = stationsActives().filter(s => s.type === poste);
     const tot = ss.reduce((n, s) => n + S.stations[s.id].portions, 0);
     const ent = Object.entries(rec.entrees).map(([i, n]) => `${n} ${DATA.ingredients[i].nom.toLowerCase()}`).join(', ');
-    const am = DATA.ameliorations[id], fm = multPoste(id) > 1 ? ` ${am.niveaux[S.niveaux[id] - 1].nom} : jusqu'à ${fourneeMax(id)} par fournée.` : '';
+    const am = DATA.ameliorations[poste], fm = multPoste(poste) > 1 ? ` ${am.niveaux[S.niveaux[poste] - 1].nom} : jusqu'à ${fourneeMax(poste)} par fournée.` : '';
     h += `<li><span>${rec.nom}</span><span class="qte">${tot}</span><small>${ent} donnent ${rec.rendement} ${rec.unite} en ${rec.duree === 'nuit' ? 'une nuit' : rec.duree + ' s'}. Vendu ${rec.prix} d${rec.perissable ? ', se garde mal' : ''}.${fm}</small></li>`;
   }
   h += `</ul><h3>Réserve</h3><ul class="reserve">`;
-  for (const [i, ing] of Object.entries(DATA.ingredients)) {
-    const tourne = vieux(i);
+  for (const i of Object.keys(DATA.ingredients).filter(i => ingredientsTaverne().includes(i) || S.stock[i] > 0)) {
+    const ing = DATA.ingredients[i], tourne = vieux(i);
     h += `<li${tourne ? ` class="tourne" title="${tourne} pourriront cette nuit"` : ''}><span>${ing.nom}</span><span>${S.stock[i]}${tourne ? ' !' : ''}</span></li>`;
   }
   const alerte = aPourrir();
@@ -888,14 +1036,14 @@ function rendrePanel() {
   }
   if (ph === 'matin') {
     h += '<h3>Marché du jour</h3><table class="marche"><tbody>';
-    for (const [i, ing] of Object.entries(DATA.ingredients)) {
-      const p = S.prix[i], t = tendance(i), libre = placeLibre();
+    for (const i of ingredientsTaverne()) {
+      const ing = DATA.ingredients[i], p = S.prix[i], t = tendance(i), libre = placeLibre();
       const sens = t.ecart <= -10 ? `<span class="bas">▼ ${t.ecart} %, bon prix</span>` : t.ecart >= 10 ? `<span class="haut">▲ +${t.ecart} %, cher</span>` : '≈ prix habituel';
       const garde = ing.garde ? ` · se garde ${ing.garde} j` : '';
       h += `<tr><td>${ing.nom}<span class="courbe" title="Prix des derniers jours">${courbe(i)}</span><small title="Comparé à la moyenne des ${DATA.marche.memoire} derniers jours">${sens}${garde}</small></td><td class="prix">${p} d</td><td class="btns"><button data-a="acheter" data-k="${i}" data-n="1" ${S.deniers < p || libre < 1 ? 'disabled' : ''}>+1</button> <button data-a="acheter" data-k="${i}" data-n="5" ${S.deniers < p * 5 || libre < 5 ? 'disabled' : ''}>+5</button></td></tr>`;
     }
     h += '</tbody></table>';
-    for (const [e, eq] of Object.entries(DATA.equipement)) if (!S.equip[e]) h += `<button class="secondaire" data-a="equip" data-k="${e}" ${S.deniers < eq.prix ? 'disabled' : ''}>Acheter un ${eq.nom.toLowerCase()} (${eq.prix} d)</button>`;
+    for (const [e, eq] of Object.entries(DATA.equipement)) if (!S.equip[e]) h += `<button class="secondaire" data-a="equip" data-k="${e}" ${S.deniers < prixTaverne(eq.prix) ? 'disabled' : ''}>Acheter un ${eq.nom.toLowerCase()} (${prixTaverne(eq.prix)} d)</button>`;
     if (S.deniers < 15 && S.dette < 100) h += `<button class="secondaire" data-a="pret">Demander 40 deniers au seigneur (50 à rendre)</button>`;
   }
   h += '<h3>Carnet</h3><ol class="carnet">' + (R.journal.length ? R.journal.map(j => `<li>${j}</li>`).join('') : '<li>Achète tes ingrédients, prépare tes plats, puis ouvre la taverne.</li>') + '</ol>';
@@ -916,7 +1064,8 @@ panel.addEventListener('click', e => {
     else if (S.deniers >= cout) { S.deniers -= cout; ajouterStock(i, n); sauver(); }
   } else if (a === 'equip' && R.phase === 'matin') {
     const eq = DATA.equipement[b.dataset.k];
-    if (S.deniers >= eq.prix) { S.deniers -= eq.prix; S.equip[b.dataset.k] = true; message(`${eq.nom} installé.`); sauver(); }
+    const p = prixTaverne(eq.prix);
+    if (S.deniers >= p) { S.deniers -= p; S.investi += p; S.equip[b.dataset.k] = true; message(`${eq.nom} installé.`); sauver(); }
   } else if (a === 'pret') {
     S.deniers += 40; S.dette += 50; message('Le seigneur t\'avance 40 deniers.'); sauver();
   } else if (a === 'nouvelle') {
@@ -925,7 +1074,7 @@ panel.addEventListener('click', e => {
       S = nouvellePartie(); S.introVue = true; S.tutoVu = true; S.musique = musique; sauver();
       R.phase = 'matin'; R.clients = []; R.journal = []; R.overlay = null; P.mains = []; P.x = ALLEE_X; P.y = 220;
       SIEGES.forEach(s => s.occ = null); resetStats(); R.confirmReset = 0; afficherOverlay();
-      message('Nouvelle partie. Bienvenue à La Chope d\'Étain.');
+      message(`Nouvelle partie. Bienvenue à ${taverne().nom}.`);
     } else R.confirmReset = Date.now() + 4000;
   }
   rendrePanel();
@@ -948,12 +1097,12 @@ const TUTO = [
     </ol>
     <p>Les prix du marché changent chaque jour. Sous chaque denrée, une petite courbe montre ses prix des derniers jours, et une flèche dit si elle est moins chère <span style="color:#3f7a2e">▼</span> ou plus chère <span style="color:#8a2e3c">▲</span> que d'habitude.</p>
     <p>Ta réserve a une place limitée : ${DATA.reserve[0].cap} ingrédients au départ. Tu peux l'agrandir le soir.</p>
-    <p class="astuce">Fais des stocks quand une denrée est bon marché, mais attention : ${Object.values(DATA.ingredients).filter(i => i.garde).map(i => `${i.nom.toLowerCase()} se garde ${i.garde} jours`).join(', ')}. Ensuite, elle pourrit dans la réserve.</p>`,
+    <p class="astuce">Fais des stocks quand une denrée est bon marché, mais attention : ${ingredientsTaverne().map(k => DATA.ingredients[k]).filter(i => i.garde).map(i => `${i.nom.toLowerCase()} se garde ${i.garde} jours`).join(', ')}. Ensuite, elle pourrit dans la réserve.</p>`,
   () => `<p class="chapitre">Deuxième page</p><h2>La fabrication</h2>
     <p>Derrière le comptoir se trouvent tes postes de travail. Approche-toi de l'un d'eux et appuie sur <kbd>R</kbd> pour lancer une fournée : les ingrédients sont pris dans ta réserve.</p>
-    <ul class="points">${Object.keys(DATA.recettes).map(recetteTuto).join('')}</ul>
+    <ul class="points">${POSTES.map(p => recetteTuto(recetteDu(p))).join('')}</ul>
     <p>L'étiquette sous chaque poste indique ce qui reste ou le temps de préparation. Une fois la fournée prête, appuie sur <kbd>E</kbd> devant le poste pour prendre une portion.</p>
-    <p class="astuce">Le ragoût et le pain ne se gardent pas : la moitié des portions restantes tourne pendant la nuit. N'en prépare pas plus que tu ne peux en vendre.</p>`,
+    <p class="astuce">${(r => `${r[0]} et ${r[1].toLowerCase()}`)(['chaudron', 'planche'].map(p => DATA.recettes[recetteDu(p)].nom))} ne se gardent pas : la moitié des portions restantes tourne pendant la nuit. N'en prépare pas plus que tu ne peux en vendre.</p>`,
   () => `<p class="chapitre">Troisième page</p><h2>Le secret de la bière</h2>
     <p>La bière ne se cuisine pas, elle se <em>brasse</em>, puis elle <em>fermente</em>. Voici ce qui se passe dans le tonneau :</p>
     <ol class="etapes">
@@ -962,8 +1111,9 @@ const TUTO = [
       <li><strong>La fermentation.</strong> On verse le moût dans le tonneau avec de la levure. Ces minuscules êtres vivants mangent le sucre et le changent en alcool et en gaz : ce sont les bulles qui montent du tonneau et la mousse dans la chope.</li>
       <li><strong>La patience.</strong> La levure travaille lentement, il lui faut toute une nuit. Plus tôt, le moût n'est qu'une eau sucrée.</li>
     </ol>
-    <p>Dans ta taverne, approche-toi d'un tonneau et appuie sur <kbd>R</kbd> : ${DATA.recettes.biere.entrees.orge} orge deviennent ${DATA.recettes.biere.rendement} chopes, prêtes au réveil. Tu peux brasser le matin ou pendant le service, et même relancer un tonneau qui n'est pas vide.</p>
-    <p class="astuce">La bière, elle, ne tourne pas. Brasse chaque jour pour ne jamais en manquer, et pense au second tonneau quand ta bourse le permet.</p>`,
+    <p>Dans ta taverne, approche-toi d'un tonneau et appuie sur <kbd>R</kbd> : ${(r => `${Object.entries(r.entrees).map(([i, n]) => `${n} ${DATA.ingredients[i].nom.toLowerCase()}`).join(' et ')} donnent ${r.rendement} ${r.unite} de ${r.nom.toLowerCase()}`)(DATA.recettes[recetteDu('tonneau')])}, prêtes au réveil. Tu peux remplir un tonneau le matin ou pendant le service, et même relancer un tonneau qui n'est pas vide.</p>
+    <p>L'hydromel et le vin se font de la même façon : la levure change le sucre du miel ou du raisin en alcool, pendant la nuit.</p>
+    <p class="astuce">Ce qui sort du tonneau, lui, ne tourne pas. Remplis-le chaque jour pour ne jamais en manquer, et pense au second tonneau quand ta bourse le permet.</p>`,
   () => `<p class="chapitre">Quatrième page</p><h2>Le service</h2>
     <ul class="points">
       <li>Un client assis montre sa commande dans une bulle. La barre au-dessus est sa <strong>patience</strong> : verte, puis jaune, puis rouge.</li>
@@ -971,7 +1121,7 @@ const TUTO = [
       <li>Approche-toi du client et appuie sur <kbd>E</kbd> pour le servir. Plus tu es rapide, plus le <strong>pourboire</strong> est gros et plus ta réputation monte.</li>
       <li>Un client dont la patience s'épuise repart fâché, et ta réputation en souffre.</li>
     </ul>
-    <p>Une bonne réputation attire du beau monde : les marchands viennent dès ${typeClient('marchand').repMin} de réputation, les chevaliers dès ${typeClient('chevalier').repMin}. Ils commandent davantage de ragoût et laissent de meilleurs pourboires.</p>
+    <p>Une bonne réputation attire du beau monde : ${Object.entries(taverne().clients).filter(([, r]) => r > 0).map(([id, r]) => `${typeClient(id).titre.replace(/^(Le|La) /, m => m.toLowerCase())} vient dès ${r} de réputation`).join(', ')}. Les clients aisés laissent de meilleurs pourboires.</p>
     <p class="astuce">Prends deux plats d'un coup quand deux clients attendent la même chose : tu économises un aller-retour.</p>`,
   () => `<p class="chapitre">Dernière page</p><h2>Le soir et la nuit</h2>
     <p>À minuit, la taverne ferme. Le bilan montre tes recettes, les clients servis et ta réputation.</p>
@@ -981,7 +1131,8 @@ const TUTO = [
       <li>Une réserve plus grande te laisse acheter en gros les jours où le marché est bas.</li>
       <li>Tu peux aussi ajouter des tables, pour recevoir plus de clients à la fois, et décorer la salle : chaque pack de décoration donne un avantage durable, comme de meilleurs pourboires ou plus de réputation.</li>
       <li>La partie est sauvegardée chaque matin.</li>
-      <li>Chaque jour, le ménestrel joue un air différent parmi trois. La touche <kbd>M</kbd> le fait taire ou reprendre.</li>
+      <li>Chaque jour, le ménestrel joue un autre air de la taverne : chaque taverne a les siens. La touche <kbd>M</kbd> le fait taire ou reprendre.</li>
+      <li>Quand ta réputation est assez haute et ta bourse assez pleine, le bilan du soir te propose d'acheter une taverne plus grande, avec d'autres recettes, d'autres denrées et d'autres clients. L'ancienne est confiée à un gérant et te verse une rente chaque soir.</li>
       <li>Si ta bourse est presque vide, le seigneur peut t'avancer de l'argent. Il se rembourse sur un quart de tes recettes chaque soir.</li>
     </ul>
     <p>Tu peux relire ce carnet à tout moment avec la touche <kbd>T</kbd> ou le bouton « Tutoriel » de l'ardoise.</p>
@@ -1020,7 +1171,7 @@ function afficherOverlay() {
       ${der ? '' : '<p style="margin:10px 0 0;text-align:right"><button class="passer" data-o="tuto-fin">Passer le tutoriel</button></p>'}`;
   } else if (R.overlay === 'intro') {
     h += `<h2>La Chope d'Étain</h2>
-      <p>Ton oncle t'a laissé sa taverne, un tonneau de bière et quelques deniers. À toi de la faire vivre.</p>
+      <p>${DATA.tavernes[0].recit}</p>
       <p>Le matin, achète tes ingrédients et lance tes préparations. Ouvre ensuite la taverne : les clients s'installent et commandent. Va chercher ce qu'ils demandent et apporte-le avant qu'ils perdent patience.</p>
       <p><kbd>Z Q S D</kbd> ou flèches pour marcher, <kbd>E</kbd> pour prendre un plat ou servir, <kbd>R</kbd> pour préparer une fournée, <kbd>P</kbd> pour la pause.</p>
       <button class="principal" data-o="commencer">Prendre le tablier</button>`;
@@ -1032,10 +1183,28 @@ function afficherOverlay() {
       <dt>Repartis mécontents</dt><dd>${R.stats.partis}</dd>
       <dt>Réputation</dt><dd>${Math.round(S.rep)} (${dr >= 0 ? '+' : ''}${dr})</dd>
       ${R.stats.remb ? `<dt>Remboursé au seigneur</dt><dd>${R.stats.remb} d</dd>` : ''}
+      ${R.stats.rentes ? `<dt>Rentes des gérants</dt><dd>+${R.stats.rentes} d</dd>` : ''}
       <dt>Bourse</dt><dd>${S.deniers} d</dd></dl>
-      <p>Le ragoût et le pain restants perdront la moitié de leurs portions pendant la nuit. La bière en fermentation sera prête au réveil.${aPourrir().length ? ` Dans la réserve, ${aPourrir().join(', ')} pourriront cette nuit.` : ''}</p>
+      <p>${DATA.recettes[recetteDu('chaudron')].nom} et ${DATA.recettes[recetteDu('planche')].nom.toLowerCase()} perdront la moitié de leurs portions pendant la nuit. Ce qui est au tonneau sera prêt au réveil.${aPourrir().length ? ` Dans la réserve, ${aPourrir().join(', ')} pourriront cette nuit.` : ''}</p>
       ${ameliorationsHtml()}
+      ${tavernesHtml()}
       <button class="principal" data-o="dormir">Dormir jusqu'au matin</button>`;
+  } else if (R.overlay === 'demenager') {
+    const tv = prochaineTaverne(), g = { taverne: S.taverne, rep: Math.round(S.rep), investi: S.investi };
+    h += `<h2>${tv.nom}</h2><p>${tv.recit}</p>
+      <p>Tu paies ${tv.prix} deniers et tu pars t'y installer demain matin. ${taverne().nom} reste à toi : un gérant la tient et te verse <strong>${renteDe(g)} deniers chaque soir</strong>.</p>
+      <p>Tu repars de zéro là-bas : réputation à 30, postes, salle et réserve de base. Ta réserve d'ici reste au gérant, tes deniers te suivent.</p>
+      <ul class="points"><li>On y sert ${POSTES.map(p => DATA.recettes[tv.recettes[p]].nom.toLowerCase()).join(', ')}.</li>
+      <li>Au marché : ${tv.ingredients.map(i => DATA.ingredients[i].nom.toLowerCase()).join(', ')}.</li>
+      <li>Les clients : ${Object.keys(tv.clients).map(id => typeClient(id).titre.replace(/^(Le|La) /, '').toLowerCase()).join(', ')}.</li>
+      <li>Le ménestrel y joue ${tv.airs.map(a => `« ${AIRS[a].nom} »`).join(' et ')}.</li></ul>
+      <div class="boutons"><button class="principal" data-o="confirmer-demenager">Acheter et déménager</button><button data-o="rester">Rester ici pour l'instant</button></div>`;
+  } else if (R.overlay === 'arrivee') {
+    const tv = taverne();
+    h += `<p class="chapitre">Nouvelle taverne</p><h2>${tv.nom}</h2><p>${tv.recit}</p>
+      <ul class="points">${POSTES.map(p => recetteTuto(recetteDu(p))).join('')}</ul>
+      <p class="astuce">L'ancien tenancier t'a laissé un tonneau plein et quelques denrées. Les prix des améliorations sont plus élevés ici, mais les plats rapportent bien plus.</p>
+      <button class="principal" data-o="reprendre">Prendre le tablier</button>`;
   } else {
     h += `<h2>Pause</h2><p>Le temps est suspendu dans la taverne.</p><div class="boutons"><button class="principal" data-o="reprendre">Reprendre</button><button data-o="tuto">Relire le tutoriel</button></div>`;
   }
@@ -1045,53 +1214,79 @@ function afficherOverlay() {
 function ameliorationsHtml() {
   let h = '<h3 class="ameliorer">Améliorer l\'auberge</h3><ul class="ameliorer">';
   for (const [id, am] of Object.entries(DATA.ameliorations)) {
-    const rec = DATA.recettes[id], niv = S.niveaux[id], suiv = am.niveaux[niv];
+    const rec = DATA.recettes[recetteDu(id)], niv = S.niveaux[id], suiv = am.niveaux[niv];
     h += `<li><span><strong>${am.poste}</strong> : ${am.niveaux[niv - 1].nom}, ${fourneeMax(id)} ${rec.unite} par fournée`;
-    h += suiv ? `<br><small>${suiv.nom} : ${rec.rendement * suiv.mult} ${rec.unite}</small></span><button data-o="ameliorer" data-k="${id}" ${S.deniers < suiv.prix ? 'disabled' : ''}>${suiv.prix} d</button>` : '<br><small>Au plus haut niveau</small></span>';
+    h += suiv ? `<br><small>${suiv.nom} : ${rec.rendement * suiv.mult} ${rec.unite}</small></span><button data-o="ameliorer" data-k="${id}" ${S.deniers < prixTaverne(suiv.prix) ? 'disabled' : ''}>${prixTaverne(suiv.prix)} d</button>` : '<br><small>Au plus haut niveau</small></span>';
     h += '</li>';
   }
   const rv = DATA.reserve[S.reserve];
   h += `<li><span><strong>La réserve</strong> : ${DATA.reserve[S.reserve - 1].nom}, ${capReserve()} places`;
-  h += rv ? `<br><small>${rv.nom} : ${rv.cap} places pour faire des stocks</small></span><button data-o="reserve" ${S.deniers < rv.prix ? 'disabled' : ''}>${rv.prix} d</button>` : '<br><small>Au plus haut niveau</small></span>';
+  h += rv ? `<br><small>${rv.nom} : ${rv.cap} places pour faire des stocks</small></span><button data-o="reserve" ${S.deniers < prixTaverne(rv.prix) ? 'disabled' : ''}>${prixTaverne(rv.prix)} d</button>` : '<br><small>Au plus haut niveau</small></span>';
   h += '</li>';
   const sv = DATA.salle[S.tables];
   h += `<li><span><strong>La salle</strong> : ${nbTables()} tables, ${nbTables() * 2} places`;
-  h += sv ? `<br><small>Une table de plus : ${sv.tables * 2} places, plus de clients à la fois</small></span><button data-o="agrandir" ${S.deniers < sv.prix ? 'disabled' : ''}>${sv.prix} d</button>` : '<br><small>La salle est pleine</small></span>';
+  h += sv ? `<br><small>Une table de plus : ${sv.tables * 2} places, plus de clients à la fois</small></span><button data-o="agrandir" ${S.deniers < prixTaverne(sv.prix) ? 'disabled' : ''}>${prixTaverne(sv.prix)} d</button>` : '<br><small>La salle est pleine</small></span>';
   h += '</li></ul><h3 class="ameliorer">Décorer la salle</h3><ul class="ameliorer">';
   for (const [id, d] of Object.entries(DATA.decorations)) {
     h += `<li><span><strong>${d.nom}</strong><br><small>${d.effet}</small></span>`;
-    h += S.deco[id] ? '<em>Installé</em>' : `<button data-o="decorer" data-k="${id}" ${S.deniers < d.prix ? 'disabled' : ''}>${d.prix} d</button>`;
+    h += S.deco[id] ? '<em>Installé</em>' : `<button data-o="decorer" data-k="${id}" ${S.deniers < prixTaverne(d.prix) ? 'disabled' : ''}>${prixTaverne(d.prix)} d</button>`;
     h += '</li>';
   }
   return h + '</ul>';
 }
 function agrandir() {
   const sv = DATA.salle[S.tables];
-  if (R.overlay !== 'bilan' || !sv || S.deniers < sv.prix) return;
-  S.deniers -= sv.prix; S.tables++;
+  const p = sv && prixTaverne(sv.prix);
+  if (R.overlay !== 'bilan' || !sv || S.deniers < p) return;
+  S.deniers -= p; S.investi += p; S.tables++;
   message(`Une nouvelle table est installée : ${nbTables() * 2} places dans la salle.`);
   sauver(); afficherOverlay();
 }
 function agrandirReserve() {
   const rv = DATA.reserve[S.reserve];
-  if (R.overlay !== 'bilan' || !rv || S.deniers < rv.prix) return;
-  S.deniers -= rv.prix; S.reserve++;
+  const p = rv && prixTaverne(rv.prix);
+  if (R.overlay !== 'bilan' || !rv || S.deniers < p) return;
+  S.deniers -= p; S.investi += p; S.reserve++;
   message(`${rv.nom} aménagé : la réserve tient ${rv.cap} ingrédients.`);
   sauver(); afficherOverlay();
 }
 function decorer(id) {
   const d = DATA.decorations[id];
-  if (R.overlay !== 'bilan' || !d || S.deco[id] || S.deniers < d.prix) return;
-  S.deniers -= d.prix; S.deco[id] = true;
+  const p = d && prixTaverne(d.prix);
+  if (R.overlay !== 'bilan' || !d || S.deco[id] || S.deniers < p) return;
+  S.deniers -= p; S.investi += p; S.deco[id] = true;
   message(`Nouvelle décoration : ${d.nom}. ${d.effet}.`);
   sauver(); afficherOverlay();
 }
 function ameliorer(id) {
   const am = DATA.ameliorations[id], suiv = am.niveaux[S.niveaux[id]];
-  if (R.overlay !== 'bilan' || !suiv || S.deniers < suiv.prix) return;
-  S.deniers -= suiv.prix; S.niveaux[id]++;
-  message(`${suiv.nom} installé : ${fourneeMax(id)} ${DATA.recettes[id].unite} par fournée.`);
+  const p = suiv && prixTaverne(suiv.prix);
+  if (R.overlay !== 'bilan' || !suiv || S.deniers < p) return;
+  S.deniers -= p; S.investi += p; S.niveaux[id]++;
+  message(`${suiv.nom} installé : ${fourneeMax(id)} ${DATA.recettes[recetteDu(id)].unite} par fournée.`);
   sauver(); afficherOverlay();
+}
+// la taverne suivante, proposée dans le bilan du soir
+function tavernesHtml() {
+  const tv = prochaineTaverne();
+  let h = '<h3 class="ameliorer">Une plus grande taverne</h3>';
+  if (S.gerances.length) h += `<p>${S.gerances.map(g => `${DATA.tavernes[g.taverne].nom} : +${renteDe(g)} d par soir`).join('<br>')}</p>`;
+  if (!tv) return h + '<p>Tu tiens la plus belle taverne du pays. Il n\'y a pas plus grand.</p>';
+  const repOk = S.rep >= tv.repRequise, argentOk = S.deniers >= tv.prix, detteOk = !S.dette;
+  h += `<ul class="ameliorer"><li><span><strong>${tv.nom}</strong>, ${tv.lieu}<br><small>${repOk ? '✓' : '✗'} Réputation ${tv.repRequise} (tu as ${Math.round(S.rep)})<br>${argentOk ? '✓' : '✗'} ${tv.prix} deniers (tu as ${S.deniers})${detteOk ? '' : '<br>✗ Rembourse d\'abord le seigneur'}</small></span>`;
+  h += `<button data-o="voir-taverne" ${repOk && argentOk && detteOk ? '' : 'disabled'}>Visiter</button></li></ul>`;
+  return h;
+}
+function demenager() {
+  const tv = prochaineTaverne();
+  if (R.overlay !== 'demenager' || !tv || S.deniers < tv.prix || S.rep < tv.repRequise || S.dette) return;
+  S.deniers -= tv.prix;
+  S.gerances.push({ taverne: S.taverne, rep: Math.round(S.rep), investi: S.investi });
+  nuit();
+  Object.assign(S, etatTaverne(S.taverne + 1));
+  resetStats(); sauver();
+  R.overlay = 'arrivee'; afficherOverlay();
+  message(`Jour ${S.jour}. Bienvenue à ${tv.nom}.`);
 }
 ov.addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
@@ -1106,12 +1301,16 @@ ov.addEventListener('click', e => {
   else if (o === 'agrandir') agrandir();
   else if (o === 'reserve') agrandirReserve();
   else if (o === 'decorer') decorer(b.dataset.k);
+  else if (o === 'voir-taverne') { R.overlay = 'demenager'; afficherOverlay(); }
+  else if (o === 'rester') { R.overlay = 'bilan'; afficherOverlay(); }
+  else if (o === 'confirmer-demenager') demenager();
   else if (o === 'reprendre') { R.overlay = null; afficherOverlay(); }
   b.blur();
 });
 
 /* ---------- musique ---------- */
-// Trois airs composés ici même (Web Audio, aucun fichier son). L'air change chaque jour et tourne en boucle.
+// Les airs sont composés ici même (Web Audio, aucun fichier son). Chaque taverne a les siens (DATA.tavernes[].airs) ;
+// l'air change chaque jour et tourne en boucle. Dans un air, mélodie et basse doivent durer le même nombre de temps.
 // Notation : « note durée » séparés par des virgules, la durée en temps ; « - » est un silence.
 const AIRS = [
   { nom: 'La Danse du Tonneau', temps: 0.2, mesure: 6, chant: 'luth', bourdon: ['D3', 'A3'], tambour: [2, 0, 0, 1, 0, 0],
@@ -1153,6 +1352,87 @@ const AIRS = [
       'D3 2, A2 2, F2 2, D3 2, C3 2, G2 2, F2 2, F2 2, G2 2, D3 2, D3 2, F2 2, C3 2, D3 2, G2 4',
       'D3 2, A2 2, F2 2, D3 2, C3 2, G2 2, F2 2, F2 2, G2 2, D3 2, D3 2, F2 2, C3 2, D3 2, G2 4',
     ] },
+  // --- Le Relais du Bourg : flûte et tambourin, airs de route ---
+  { nom: 'La Gigue du Relais', temps: 0.19, mesure: 6, chant: 'flute', bourdon: ['G2', 'D3'], tambour: [2, 0, 0, 1, 0, 1],
+    melodie: [
+      'G4 2, B4 1, D5 2, B4 1, C5 2, A4 1, F#4 2, A4 1, G4 2, B4 1, D5 1, E5 1, D5 1, C5 2, A4 1, D4 3',
+      'G4 2, B4 1, D5 2, B4 1, C5 2, A4 1, F#4 2, A4 1, B4 2, A4 1, G4 1, F#4 1, E4 1, D4 2, F#4 1, G4 3',
+      'D5 2, E5 1, D5 2, B4 1, C5 2, E5 1, A4 3, B4 2, D5 1, G5 2, D5 1, E5 2, C5 1, A4 3',
+      'D5 2, E5 1, D5 2, B4 1, C5 2, A4 1, B4 2, G4 1, A4 2, F#4 1, D4 2, F#4 1, G4 6',
+    ],
+    basse: [
+      'G2 6, A2 3, D3 3, G2 6, D3 6',
+      'G2 6, A2 3, D3 3, G2 3, C3 3, D3 3, G2 3',
+      'G2 6, C3 3, A2 3, G2 6, C3 3, D3 3',
+      'G2 6, A2 3, D3 3, D3 3, D2 3, G2 6',
+    ] },
+  { nom: 'Le Pas du Pèlerin', temps: 0.3, mesure: 4, chant: 'luth', bourdon: ['E2', 'B2'], tambour: [2, 0, 1, 0],
+    melodie: [
+      'E4 2, G4 1, A4 1, B4 2, A4 1, G4 1, A4 2, B4 1, D5 1, E5 4',
+      'D5 2, B4 1, A4 1, G4 2, A4 1, B4 1, A4 1, G4 1, F#4 1, D4 1, E4 4',
+      'B4 2, D5 1, E5 1, F#5 2, E5 1, D5 1, E5 2, D5 1, B4 1, A4 4',
+      'G4 2, A4 1, B4 1, D5 2, B4 1, A4 1, G4 1, F#4 1, D4 2, E4 4',
+    ],
+    basse: [
+      'E2 4, G2 4, D3 4, E2 4',
+      'G2 4, D3 4, D2 4, E2 4',
+      'G2 4, D3 4, A2 4, D3 4',
+      'C3 4, G2 4, D3 4, E2 4',
+    ] },
+  // --- L'Hostellerie du Lion d'Or : airs de ville, plus posés ---
+  { nom: 'La Pavane des Bourgeois', temps: 0.42, mesure: 4, chant: 'flute', bourdon: ['D2', 'A2'], tambour: [2, 0, 1, 1],
+    melodie: [
+      'D5 2, D5 1, C5 1, A4 2, A4 2, Bb4 2, A4 1, G4 1, A4 4',
+      'D5 2, D5 1, E5 1, F5 2, E5 2, D5 2, C#5 2, D5 4',
+      'F5 2, E5 1, D5 1, C5 2, A4 2, Bb4 2, G4 2, A4 4',
+      'D5 2, C5 1, Bb4 1, A4 2, G4 1, F4 1, E4 2, C#4 2, D4 4',
+    ],
+    basse: [
+      'D3 4, F2 4, G2 4, A2 4',
+      'D3 4, D3 4, G2 4, A2 2, D3 2',
+      'F2 4, F2 4, G2 4, A2 4',
+      'Bb2 4, F2 2, C3 2, A2 4, D3 4',
+    ] },
+  { nom: 'La Ronde des Marchands', temps: 0.22, mesure: 3, chant: 'luth', bourdon: ['C3', 'G3'], tambour: [2, 0, 1],
+    melodie: [
+      'C5 2, E5 1, G5 2, E5 1, F5 1, E5 1, D5 1, C5 3, D5 2, F5 1, E5 2, C5 1, D5 1, C5 1, B4 1, G4 3',
+      'C5 2, E5 1, G5 2, E5 1, F5 1, E5 1, D5 1, C5 3, A4 2, C5 1, B4 2, D5 1, C5 3, C5 3',
+      'E5 2, G5 1, A5 2, G5 1, F5 2, E5 1, D5 3, D5 2, F5 1, G5 2, F5 1, E5 2, D5 1, C5 3',
+      'E5 2, D5 1, C5 2, B4 1, A4 2, B4 1, C5 3, D5 1, E5 1, D5 1, C5 1, B4 1, A4 1, G4 3, C5 3',
+    ],
+    basse: [
+      'C3 3, C3 3, F2 3, C3 3, G2 3, C3 3, G2 3, G2 3',
+      'C3 3, C3 3, F2 3, C3 3, F2 3, G2 3, C3 3, C3 3',
+      'C3 3, F2 3, F2 3, G2 3, G2 3, C3 3, G2 3, C3 3',
+      'C3 3, F2 3, F2 3, C3 3, G2 3, G2 3, G2 3, C3 3',
+    ] },
+  // --- La Grande Salle du Château : chalemie de cour et basse danse ---
+  { nom: 'La Fanfare du Seigneur', temps: 0.26, mesure: 4, chant: 'chalemie', bourdon: ['D3', 'A3'], tambour: [2, 0, 1, 0, 2, 0, 1, 1],
+    melodie: [
+      'D5 2, A4 1, A4 1, D5 2, F#5 2, E5 1, D5 1, E5 1, F#5 1, A4 4',
+      'D5 2, A4 1, A4 1, D5 2, F#5 2, E5 1, D5 1, C#5 1, E5 1, D5 4',
+      'F#5 2, G5 1, A5 1, G5 2, F#5 2, E5 1, F#5 1, G5 1, E5 1, F#5 4',
+      'A5 2, F#5 1, D5 1, G5 2, E5 2, F#5 1, D5 1, E5 1, C#5 1, D5 4',
+    ],
+    basse: [
+      'D3 4, D3 4, A2 4, D3 4',
+      'D3 4, D3 4, A2 4, D3 4',
+      'D3 4, G2 4, A2 4, D3 4',
+      'D3 4, G2 4, A2 4, D3 4',
+    ] },
+  { nom: 'La Basse Danse de la Reine', temps: 0.36, mesure: 3, chant: 'flute', bourdon: ['A2', 'E3'], tambour: [2, 0, 1],
+    melodie: [
+      'A4 3, C5 2, B4 1, A4 2, G#4 1, A4 3, E5 3, D5 2, C5 1, B4 2, A4 1, B4 3',
+      'A4 3, C5 2, B4 1, A4 2, G#4 1, A4 3, C5 2, D5 1, E5 2, D5 1, C5 1, B4 2, A4 3',
+      'E5 3, F5 2, E5 1, D5 2, C5 1, D5 3, C5 2, B4 1, A4 2, B4 1, C5 2, B4 1, E4 3',
+      'E5 3, F5 2, E5 1, D5 2, C5 1, B4 3, C5 2, A4 1, B4 2, G#4 1, A4 6',
+    ],
+    basse: [
+      'A2 3, A2 3, F2 3, E2 3, A2 3, D3 3, E2 3, E2 3',
+      'A2 3, A2 3, F2 3, A2 3, C3 3, G2 3, E2 3, A2 3',
+      'C3 3, C3 3, G2 3, G2 3, A2 3, F2 3, C3 3, E2 3',
+      'C3 3, D3 3, G2 3, E2 3, A2 3, E2 3, A2 6',
+    ] },
 ];
 const Musique = (() => {
   const DEMI = { C: -9, D: -7, E: -5, F: -4, G: -2, A: 0, B: 2 };
@@ -1170,6 +1450,14 @@ const Musique = (() => {
       g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.22, t + 0.07);
       g.gain.setValueAtTime(0.2, t + d * 0.85); g.gain.linearRampToValueAtTime(0, t + d);
       o.start(t); vib.start(t); o.stop(t + d + 0.05); vib.stop(t + d + 0.05);
+    } else if (type === 'chalemie') { // anche double, nasillarde : onde carrée filtrée, tenue
+      const o = ac.createOscillator(), filtre = ac.createBiquadFilter();
+      o.type = 'square'; o.frequency.value = f;
+      filtre.type = 'lowpass'; filtre.frequency.value = f * 3.5; filtre.Q.value = 2;
+      o.connect(filtre); filtre.connect(g);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.1, t + 0.03);
+      g.gain.setValueAtTime(0.085, t + d * 0.8); g.gain.linearRampToValueAtTime(0, t + d * 0.95);
+      o.start(t); o.stop(t + d);
     } else { // corde pincée : luth pour le chant, plus grave et plus doux pour la basse
       const o = ac.createOscillator(), filtre = ac.createBiquadFilter(), basse = type === 'basse';
       o.type = basse ? 'triangle' : 'sawtooth'; o.frequency.value = f;
@@ -1240,7 +1528,7 @@ const Musique = (() => {
   const battement = () => ac && air >= 0 && ac.state === 'running' ? (ac.currentTime - curseurs[0].t0) / pistes[air].temps : null;
   return { demarrer, maj, battement, nom: n => AIRS[n].nom };
 })();
-const airDuJour = () => (S.jour - 1) % AIRS.length;
+const airDuJour = () => { const a = taverne().airs; return a[(S.jour - 1) % a.length]; }; // chaque taverne a ses airs
 function basculerMusique() {
   S.musique = S.musique === false; sauver();
   message(S.musique ? `Le ménestrel reprend : ${Musique.nom(airDuJour())}.` : 'Le ménestrel se tait.');
