@@ -64,6 +64,8 @@ button.principal:hover{background:#f2d684}
 .carnet li:not(:first-child){color:var(--craie-pale)}
 .pied{margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.8rem;color:var(--craie-pale)}
 .pied button{font-size:.8rem}
+.air{margin:14px 0 0;display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.85rem;font-style:italic;color:var(--craie-pale)}
+.air button{font-size:.8rem;font-style:normal;white-space:nowrap}
 #overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(14,10,6,.7);padding:16px}
 #overlay.visible{display:flex}
 .carte{background:var(--parchemin);color:var(--encre);max-width:440px;width:100%;padding:22px 26px;border-radius:2px;box-shadow:0 0 0 3px #6b4a2e,0 20px 40px rgba(0,0,0,.5);max-height:100%;overflow:auto}
@@ -104,7 +106,7 @@ button.principal:hover{background:#f2d684}
       <canvas id="jeu" width="800" height="600" aria-label="Salle de la taverne"></canvas>
       <div id="overlay" role="dialog" aria-modal="true"></div>
     </div>
-    <p class="aide"><kbd>Z Q S D</kbd> ou flèches : se déplacer. <kbd>E</kbd> : prendre un plat ou servir. <kbd>R</kbd> : préparer une fournée. <kbd>P</kbd> : pause. <kbd>T</kbd> : tutoriel.</p>
+    <p class="aide"><kbd>Z Q S D</kbd> ou flèches : se déplacer. <kbd>E</kbd> : prendre un plat ou servir. <kbd>R</kbd> : préparer une fournée. <kbd>P</kbd> : pause. <kbd>T</kbd> : tutoriel. <kbd>M</kbd> : musique.</p>
   </div>
   <aside class="ardoise" id="ardoise" aria-live="polite"></aside>
 </div>
@@ -177,7 +179,7 @@ const stationsActives = () => STATIONS.filter(s => !s.equip || S.equip[s.equip])
 /* ---------- état et sauvegarde ---------- */
 function nouvellePartie() {
   return {
-    version: 1, jour: 1, deniers: 40, rep: 30, dette: 0, introVue: false, tutoVu: false,
+    version: 1, jour: 1, deniers: 40, rep: 30, dette: 0, introVue: false, tutoVu: false, musique: true,
     stock: { orge: 3, viande: 1, legumes: 4, bois: 4, pain: 2, fromage: 2 },
     stations: {
       tonneau1: { portions: 12, enCours: false, reste: 0 },
@@ -232,6 +234,7 @@ addEventListener('keydown', e => {
     else if (e.code === 'Escape' || e.code === 'KeyT') fermerTuto();
     return;
   }
+  if (e.code === 'KeyM') { basculerMusique(); return; }
   if (e.code === 'KeyT') ouvrirTuto();
   else if (e.code === 'KeyE') interagir();
   else if (e.code === 'KeyR') preparer();
@@ -660,6 +663,7 @@ function rendrePanel() {
     if (S.deniers < 15 && S.dette < 100) h += `<button class="secondaire" data-a="pret">Demander 40 deniers au seigneur (50 à rendre)</button>`;
   }
   h += '<h3>Carnet</h3><ol class="carnet">' + (R.journal.length ? R.journal.map(j => `<li>${j}</li>`).join('') : '<li>Achète tes ingrédients, prépare tes plats, puis ouvre la taverne.</li>') + '</ol>';
+  h += `<p class="air"><span>♪ ${S.musique === false ? 'Le ménestrel se tait' : Musique.nom(airDuJour())}</span><button data-a="musique">${S.musique === false ? 'Remettre la musique' : 'Couper la musique'}</button></p>`;
   h += `<div class="pied"><span>Sauvegarde chaque matin</span><button data-a="tuto">Tutoriel</button><button data-a="nouvelle">${Date.now() < R.confirmReset ? 'Confirmer : tout effacer' : 'Nouvelle partie'}</button></div>`;
   if (h !== dernierPanel) { panel.innerHTML = h; dernierPanel = h; }
 }
@@ -669,6 +673,7 @@ panel.addEventListener('click', e => {
   const a = b.dataset.a;
   if (a === 'ouvrir') ouvrir();
   else if (a === 'tuto') ouvrirTuto();
+  else if (a === 'musique') basculerMusique();
   else if (a === 'acheter' && R.phase === 'matin') {
     const i = b.dataset.k, n = +b.dataset.n, cout = S.prix[i] * n;
     if (S.deniers >= cout) { S.deniers -= cout; S.stock[i] += n; sauver(); }
@@ -679,7 +684,8 @@ panel.addEventListener('click', e => {
     S.deniers += 40; S.dette += 50; message('Le seigneur t\'avance 40 deniers.'); sauver();
   } else if (a === 'nouvelle') {
     if (Date.now() < R.confirmReset) {
-      S = nouvellePartie(); S.introVue = true; S.tutoVu = true; sauver();
+      const musique = S.musique;
+      S = nouvellePartie(); S.introVue = true; S.tutoVu = true; S.musique = musique; sauver();
       R.phase = 'matin'; R.clients = []; R.journal = []; R.overlay = null; P.mains = []; P.x = ALLEE_X; P.y = 220;
       SIEGES.forEach(s => s.occ = null); resetStats(); R.confirmReset = 0; afficherOverlay();
       message('Nouvelle partie. Bienvenue à La Chope d\'Étain.');
@@ -733,6 +739,7 @@ const TUTO = [
     <ul class="points">
       <li>Pendant la nuit, la bière en fermentation devient prête et la moitié du ragoût et du pain restants se perd.</li>
       <li>La partie est sauvegardée chaque matin.</li>
+      <li>Chaque jour, le ménestrel joue un air différent parmi trois. La touche <kbd>M</kbd> le fait taire ou reprendre.</li>
       <li>Si ta bourse est presque vide, le seigneur peut t'avancer de l'argent. Il se rembourse sur un quart de tes recettes chaque soir.</li>
     </ul>
     <p>Tu peux relire ce carnet à tout moment avec la touche <kbd>T</kbd> ou le bouton « Tutoriel » de l'ardoise.</p>
@@ -805,6 +812,142 @@ ov.addEventListener('click', e => {
   b.blur();
 });
 
+/* ---------- musique ---------- */
+// Trois airs composés ici même (Web Audio, aucun fichier son). L'air change chaque jour et tourne en boucle.
+// Notation : « note durée » séparés par des virgules, la durée en temps ; « - » est un silence.
+const AIRS = [
+  { nom: 'La Danse du Tonneau', temps: 0.2, mesure: 6, chant: 'luth', bourdon: ['D3', 'A3'], tambour: [2, 0, 0, 1, 0, 0],
+    melodie: [
+      'D4 2, F4 1, A4 2, D5 1, C5 2, A4 1, G4 2, E4 1, F4 2, G4 1, A4 1, G4 1, F4 1, E4 2, D4 1, E4 3',
+      'D4 2, F4 1, A4 2, D5 1, C5 2, A4 1, G4 2, E4 1, F4 2, G4 1, A4 1, G4 1, F4 1, E4 2, C4 1, D4 3',
+      'A4 2, D5 1, D5 2, E5 1, F5 2, E5 1, D5 2, C5 1, D5 2, A4 1, C5 2, A4 1, G4 3, A4 3',
+      'A4 2, D5 1, D5 2, E5 1, F5 2, E5 1, D5 1, C5 1, A4 1, G4 2, F4 1, E4 2, C4 1, D4 6',
+    ],
+    basse: [
+      'D3 6, C3 3, A2 3, F2 6, A2 6',
+      'D3 6, C3 3, A2 3, F2 6, A2 3, D3 3',
+      'D3 6, D3 3, A2 3, D3 3, F3 3, C3 3, A2 3',
+      'D3 6, D3 3, F2 3, C3 3, A2 3, D3 6',
+    ] },
+  { nom: "La Complainte de l'Aubergiste", temps: 0.75, mesure: 3, chant: 'flute', bourdon: ['A2', 'E3'], tambour: [1, 0, 0],
+    melodie: [
+      'A4 2, C5 1, B4 2, A4 1, G4 2, E4 1, A4 3, C5 2, D5 1, E5 2, D5 1, C5 1, B4 1, A4 1, B4 3',
+      'A4 2, C5 1, B4 2, A4 1, G4 1, F4 1, E4 1, D4 3, E4 2, G4 1, A4 1, B4 1, G4 1, A4 3, - 3',
+      'E5 2, E5 1, D5 2, C5 1, D5 2, B4 1, C5 3, A4 2, C5 1, E5 2, G5 1, E5 1, D5 1, C5 1, B4 3',
+      'C5 2, B4 1, A4 2, G4 1, E4 1, G4 1, A4 1, B4 3, C5 1, B4 1, A4 1, G4 1, E4 1, G4 1, A4 3, - 3',
+    ],
+    basse: [
+      'A2 3, G2 3, E2 3, A2 3, A2 3, C3 3, F2 3, E2 3',
+      'A2 3, G2 3, C3 3, D3 3, C3 3, G2 3, A2 3, A2 3',
+      'C3 3, G2 3, G2 3, C3 3, F2 3, C3 3, A2 3, E2 3',
+      'A2 3, F2 3, C3 3, E2 3, A2 3, E2 3, A2 3, A2 3',
+    ] },
+  { nom: 'Le Branle de la Chope', temps: 0.24, mesure: 4, chant: 'luth', bourdon: ['G2', 'D3'], tambour: [2, 0, 1, 0],
+    melodie: [
+      'G4 2, G4 1, A4 1, B4 2, G4 2, C5 1, B4 1, A4 1, G4 1, A4 2, D4 2, G4 2, G4 1, A4 1, B4 2, D5 2, C5 1, B4 1, A4 1, F4 1, G4 4',
+      'G4 2, G4 1, A4 1, B4 2, G4 2, C5 1, B4 1, A4 1, G4 1, A4 2, D4 2, G4 2, G4 1, A4 1, B4 2, D5 2, C5 1, B4 1, A4 1, F4 1, G4 4',
+      'D5 2, D5 1, E5 1, F5 2, D5 2, E5 1, D5 1, C5 1, B4 1, C5 2, A4 2, B4 1, C5 1, D5 1, B4 1, A4 1, G4 1, F4 2, G4 1, A4 1, B4 1, A4 1, G4 4',
+      'D5 2, D5 1, E5 1, F5 2, D5 2, E5 1, D5 1, C5 1, B4 1, C5 2, A4 2, B4 1, C5 1, D5 1, B4 1, A4 1, G4 1, F4 2, G4 1, A4 1, B4 1, A4 1, G4 4',
+    ],
+    basse: [
+      'G2 2, D3 2, G2 2, D3 2, C3 2, G2 2, D3 2, D2 2, G2 2, D3 2, G2 2, B2 2, C3 2, D3 2, G2 4',
+      'G2 2, D3 2, G2 2, D3 2, C3 2, G2 2, D3 2, D2 2, G2 2, D3 2, G2 2, B2 2, C3 2, D3 2, G2 4',
+      'D3 2, A2 2, F2 2, D3 2, C3 2, G2 2, F2 2, F2 2, G2 2, D3 2, D3 2, F2 2, C3 2, D3 2, G2 4',
+      'D3 2, A2 2, F2 2, D3 2, C3 2, G2 2, F2 2, F2 2, G2 2, D3 2, D3 2, F2 2, C3 2, D3 2, G2 4',
+    ] },
+];
+const Musique = (() => {
+  const DEMI = { C: -9, D: -7, E: -5, F: -4, G: -2, A: 0, B: 2 };
+  const freq = n => 440 * 2 ** ((DEMI[n[0]] + (n[1] === '#' ? 1 : n[1] === 'b' ? -1 : 0) + 12 * (+n[n.length - 1] - 4)) / 12);
+  const lire = parts => parts.join(', ').split(',').map(s => { const [n, d] = s.trim().split(/\s+/); return { f: n === '-' ? 0 : freq(n), d: +d }; });
+  const pistes = AIRS.map(a => ({ ...a, voix: [lire(a.melodie), lire(a.basse)] }));
+  let ac = null, maitre = null, bruit = null, air = -1, bus = null, bourdons = [], minuteur = 0, curseurs = [], tTambour = 0, iTambour = 0;
+
+  function note(type, f, t, d, sortie) {
+    const g = ac.createGain(); g.connect(sortie);
+    if (type === 'flute') {
+      const o = ac.createOscillator(), vib = ac.createOscillator(), vg = ac.createGain();
+      o.type = 'sine'; o.frequency.value = f; vib.frequency.value = 5; vg.gain.value = f * 0.006;
+      vib.connect(vg); vg.connect(o.frequency); o.connect(g);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.22, t + 0.07);
+      g.gain.setValueAtTime(0.2, t + d * 0.85); g.gain.linearRampToValueAtTime(0, t + d);
+      o.start(t); vib.start(t); o.stop(t + d + 0.05); vib.stop(t + d + 0.05);
+    } else { // corde pincée : luth pour le chant, plus grave et plus doux pour la basse
+      const o = ac.createOscillator(), filtre = ac.createBiquadFilter(), basse = type === 'basse';
+      o.type = basse ? 'triangle' : 'sawtooth'; o.frequency.value = f;
+      filtre.type = 'lowpass'; filtre.frequency.setValueAtTime(basse ? 900 : f * 6, t); filtre.frequency.exponentialRampToValueAtTime(basse ? 300 : f * 1.5, t + 0.4);
+      o.connect(filtre); filtre.connect(g);
+      const fin = t + Math.min(d + 0.3, 1.6), vol = basse ? 0.3 : 0.16;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.006); g.gain.exponentialRampToValueAtTime(0.001, fin);
+      o.start(t); o.stop(fin);
+    }
+  }
+  function tambour(t, fort) { // tambourin : coup sourd et peau frappée
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(55, t + 0.15);
+    g.gain.setValueAtTime(fort ? 0.4 : 0.2, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+    o.connect(g); g.connect(bus); o.start(t); o.stop(t + 0.3);
+    const b = ac.createBufferSource(), fb = ac.createBiquadFilter(), gb = ac.createGain();
+    b.buffer = bruit; fb.type = 'bandpass'; fb.frequency.value = 900; fb.Q.value = 0.8;
+    gb.gain.setValueAtTime(fort ? 0.12 : 0.06, t); gb.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+    b.connect(fb); fb.connect(gb); gb.connect(bus); b.start(t); b.stop(t + 0.1);
+  }
+  function planifier() {
+    const p = pistes[air], horizon = ac.currentTime + 0.3;
+    p.voix.forEach((v, i) => {
+      const c = curseurs[i];
+      while (c.t < horizon) {
+        const n = v[c.i], d = n.d * p.temps;
+        if (n.f) note(i ? 'basse' : p.chant, n.f, c.t, d, bus);
+        c.t += d; c.i = (c.i + 1) % v.length;
+      }
+    });
+    while (tTambour < horizon) {
+      const a = p.tambour[iTambour % p.tambour.length];
+      if (a) tambour(tTambour, a === 2);
+      tTambour += p.temps; iTambour++;
+    }
+  }
+  function lancer(n) {
+    if (bus) { // l'air précédent s'éteint doucement
+      const vieux = bus, osc = bourdons; vieux.gain.setTargetAtTime(0, ac.currentTime, 0.4);
+      setTimeout(() => { osc.forEach(o => o.stop()); vieux.disconnect(); }, 3000);
+      bus = null; clearInterval(minuteur);
+    }
+    air = n;
+    if (n < 0) return;
+    const p = pistes[n], t0 = ac.currentTime + 0.5;
+    bus = ac.createGain(); bus.connect(maitre);
+    bus.gain.setValueAtTime(0, ac.currentTime); bus.gain.linearRampToValueAtTime(1, t0);
+    const fb = ac.createBiquadFilter(), gb = ac.createGain(); // bourdon de vielle, en continu
+    fb.type = 'lowpass'; fb.frequency.value = 500; gb.gain.value = 0.035; fb.connect(gb); gb.connect(bus);
+    bourdons = p.bourdon.map(nb => { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = freq(nb); o.connect(fb); o.start(); return o; });
+    curseurs = p.voix.map(() => ({ i: 0, t: t0 })); tTambour = t0; iTambour = 0;
+    planifier(); minuteur = setInterval(planifier, 80);
+  }
+  function maj(voulu) { // appelée à chaque image : change d'air si besoin
+    if (!ac || voulu === air) return;
+    lancer(voulu);
+    if (voulu < 0) setTimeout(() => { if (air < 0) ac.suspend(); }, 1500); else ac.resume();
+  }
+  function demarrer() { // les navigateurs n'autorisent le son qu'après un geste du joueur
+    if (ac) return;
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    ac = new AC(); maitre = ac.createGain(); maitre.gain.value = 0.45; maitre.connect(ac.destination);
+    bruit = ac.createBuffer(1, ac.sampleRate * 0.1, ac.sampleRate);
+    const d = bruit.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  document.addEventListener('visibilitychange', () => { if (ac && air >= 0) document.hidden ? ac.suspend() : ac.resume(); });
+  return { demarrer, maj, nom: n => AIRS[n].nom };
+})();
+const airDuJour = () => (S.jour - 1) % AIRS.length;
+function basculerMusique() {
+  S.musique = S.musique === false; sauver();
+  message(S.musique ? `Le ménestrel reprend : ${Musique.nom(airDuJour())}.` : 'Le ménestrel se tait.');
+}
+addEventListener('pointerdown', Musique.demarrer);
+addEventListener('keydown', Musique.demarrer);
+
 /* ---------- boucle ---------- */
 if (!S.introVue) R.overlay = 'intro';
 else if (!S.tutoVu) ouvrirTuto(); // parties commencées avant l'ajout du tutoriel
@@ -813,6 +956,7 @@ let dernier = performance.now(), dernierRendu = 0;
 function boucle(now) {
   const dt = Math.min(0.05, (now - dernier) / 1000); dernier = now;
   if (!R.overlay) maj(dt);
+  Musique.maj(S.musique === false ? -1 : airDuJour());
   dessiner(now / 1000);
   if (now - dernierRendu > 250) { rendrePanel(); dernierRendu = now; }
   requestAnimationFrame(boucle);
