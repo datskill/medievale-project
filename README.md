@@ -13,6 +13,7 @@ Contrôles : ZQSD ou flèches pour se déplacer, E pour prendre un plat ou servi
 - Le matin : acheter les ingrédients au marché (prix variables chaque jour) et lancer les préparations.
 - Le service : les clients (paysans, marchands, chevaliers) s'installent et commandent ; le tavernier va chercher les plats et les sert avant que leur patience s'épuise.
 - Le soir : bilan des recettes et de la réputation. Le ragoût et le pain se gardent mal, la bière fermente pendant la nuit.
+- Le soir, on dépense ses deniers pour améliorer l'auberge : postes plus grands, tables en plus (jusqu'à six, pour accueillir plus de clients) et packs de décoration (herbes et fleurs, lanternes, tentures, trophées) qui donnent chacun un avantage durable.
 - Pas de défaite : en cas de besoin, le seigneur prête de l'argent.
 
 ## Technique
